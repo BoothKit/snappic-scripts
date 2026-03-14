@@ -3,10 +3,16 @@ document.addEventListener("DOMContentLoaded", function () {
   const galleryImgs = [...document.querySelectorAll("#gallery .grid-item img")];
   if (!host || galleryImgs.length < 6) return;
 
-  const state = {
+  const STORAGE_KEYS = {
+    settings: "fp_settings_v5",
+    leaderboard: "fp_lb_v5"
+  };
+
+  const DEFAULTS = {
     playerName: "",
     autoBackTimer: 0,
     roundTimerId: 0,
+    idleRefreshTimerId: 0,
     firstCard: null,
     lockBoard: false,
     roundStartedAt: 0,
@@ -14,22 +20,39 @@ document.addEventListener("DOMContentLoaded", function () {
     matchedPairs: 0,
     idlePreview: true,
     startPreview: true,
-    winTarget: 1, // 1,2,3,4,"all"
+    winTarget: 1,
     startCountdown: 3,
     roundTime: 20,
+    idleRefreshSeconds: 30,
+    cardCount: 12,
     gameActive: false,
     adminUnlocked: false,
-    adminPin: "1111"
+    adminPin: "1111",
+    theme: {
+      bg: "#0F1115",
+      accent: "#FFFFFF",
+      accentText: "#111111",
+      card: "#151821",
+      panel: "#1C1F27"
+    },
+    logoUrl: "https://theboothkit.com/wp-content/uploads/2026/02/Site-Logo.png",
+    headerLogoUrl: "",
+    bgImageUrl: ""
   };
+
+  const state = JSON.parse(JSON.stringify(DEFAULTS));
 
   const app = document.createElement("div");
   app.id = "fp-game";
   app.innerHTML =
     '<div id="fp-wrap">' +
       '<div id="fp-top">' +
-        '<div>' +
-          '<div id="fp-title">Find the Match</div>' +
-          '<div id="fp-player"></div>' +
+        '<div id="fp-brand">' +
+          '<div id="fp-header-logo-wrap" class="hidden"><img id="fp-header-logo" alt="Header Logo"></div>' +
+          '<div>' +
+            '<div id="fp-title">Find the Match</div>' +
+            '<div id="fp-player"></div>' +
+          '</div>' +
         '</div>' +
         '<div id="fp-top-right">' +
           '<div id="fp-timer">20</div>' +
@@ -37,17 +60,23 @@ document.addEventListener("DOMContentLoaded", function () {
         '</div>' +
       '</div>' +
 
-      '<div id="fp-board"></div>' +
-
-      '<button id="fp-play" type="button">Play</button>' +
+      '<div id="fp-board-shell">' +
+        '<div id="fp-board"></div>' +
+        '<div id="fp-board-center-lane" aria-hidden="true"></div>' +
+        '<button id="fp-play" type="button">Play</button>' +
+      '</div>' +
 
       '<div id="fp-center" class="hidden">' +
+        '<div id="fp-center-backdrop"></div>' +
         '<div id="fp-card">' +
           '<h2 id="fp-head">Find the Match</h2>' +
           '<p id="fp-copy">Enter your name, then tap start.</p>' +
           '<div id="fp-name">ENTER NAME</div>' +
           '<div id="fp-keys"></div>' +
-          '<button id="fp-start" disabled>Tap to Start</button>' +
+          '<div id="fp-entry-actions">' +
+            '<button id="fp-cancel" type="button" class="fp-secondary-action">Cancel</button>' +
+            '<button id="fp-start" disabled>Tap to Start</button>' +
+          '</div>' +
           '<button id="fp-replay" class="hidden">Start Over</button>' +
           '<div id="fp-leaderboard"></div>' +
         '</div>' +
@@ -73,7 +102,7 @@ document.addEventListener("DOMContentLoaded", function () {
             '<div class="fp-admin-header">' +
               '<div>' +
                 '<div class="fp-admin-title">Admin Settings</div>' +
-                '<p class="fp-admin-sub">Adjust gameplay, visuals, and leaderboard.</p>' +
+                '<p class="fp-admin-sub">Adjust gameplay, visuals, assets, refresh behavior, and security.</p>' +
               '</div>' +
               '<button id="fp-admin-close" type="button" class="fp-admin-icon">✕</button>' +
             '</div>' +
@@ -91,7 +120,7 @@ document.addEventListener("DOMContentLoaded", function () {
                   '<button type="button" class="fp-chip" data-win="all">All</button>' +
                 '</div>' +
 
-                '<div class="fp-admin-row-2">' +
+                '<div class="fp-admin-row-3">' +
                   '<div>' +
                     '<label class="fp-admin-label" for="fp-setting-countdown">Countdown</label>' +
                     '<input id="fp-setting-countdown" class="fp-admin-number" type="number" min="0" max="10" step="1">' +
@@ -100,6 +129,19 @@ document.addEventListener("DOMContentLoaded", function () {
                     '<label class="fp-admin-label" for="fp-setting-timer">Round Timer</label>' +
                     '<input id="fp-setting-timer" class="fp-admin-number" type="number" min="5" max="120" step="1">' +
                   '</div>' +
+                  '<div>' +
+                    '<label class="fp-admin-label" for="fp-setting-idle-refresh">Idle Refresh (sec)</label>' +
+                    '<input id="fp-setting-idle-refresh" class="fp-admin-number" type="number" min="0" max="600" step="1">' +
+                  '</div>' +
+                '</div>' +
+
+                '<label class="fp-admin-label fp-admin-label-top">Card Layout</label>' +
+                '<div id="fp-card-counts" class="fp-chip-group">' +
+                  '<button type="button" class="fp-chip" data-card-count="6">6 Cards</button>' +
+                  '<button type="button" class="fp-chip" data-card-count="8">8 Cards</button>' +
+                  '<button type="button" class="fp-chip" data-card-count="10">10 Cards</button>' +
+                  '<button type="button" class="fp-chip" data-card-count="12">12 Cards</button>' +
+                  '<button type="button" class="fp-chip" data-card-count="16">16 Cards</button>' +
                 '</div>' +
 
                 '<div class="fp-toggle-row">' +
@@ -121,6 +163,48 @@ document.addEventListener("DOMContentLoaded", function () {
                   '<button type="button" class="fp-chip fp-preset" data-preset="purple">BoothKit Purple</button>' +
                   '<button type="button" class="fp-chip fp-preset" data-preset="gold">Gold Luxe</button>' +
                 '</div>' +
+              '</div>' +
+
+              '<div class="fp-admin-section">' +
+                '<h3>Brand Assets</h3>' +
+
+                '<label class="fp-admin-label" for="fp-header-logo-upload">Header Logo Upload</label>' +
+                '<input id="fp-header-logo-upload" type="file" accept="image/*" class="fp-admin-file">' +
+                '<div id="fp-header-logo-status" class="fp-admin-note">No custom header logo loaded.</div>' +
+                '<div class="fp-admin-actions">' +
+                  '<button id="fp-remove-header-logo" type="button" class="fp-admin-secondary">Remove Header Logo</button>' +
+                '</div>' +
+
+                '<label class="fp-admin-label fp-admin-label-top" for="fp-logo-upload">Card Back Logo Upload</label>' +
+                '<input id="fp-logo-upload" type="file" accept="image/*" class="fp-admin-file">' +
+                '<div id="fp-logo-status" class="fp-admin-note">Using current saved card-back logo.</div>' +
+                '<div class="fp-admin-actions">' +
+                  '<button id="fp-remove-logo" type="button" class="fp-admin-secondary">Remove Card Back Logo</button>' +
+                '</div>' +
+
+                '<label class="fp-admin-label fp-admin-label-top" for="fp-bg-upload">Background Image Upload</label>' +
+                '<input id="fp-bg-upload" type="file" accept="image/*" class="fp-admin-file">' +
+                '<div id="fp-bg-status" class="fp-admin-note">Using color background only.</div>' +
+                '<div class="fp-admin-actions">' +
+                  '<button id="fp-remove-bg" type="button" class="fp-admin-secondary">Remove Background Image</button>' +
+                '</div>' +
+              '</div>' +
+
+              '<div class="fp-admin-section">' +
+                '<h3>Security</h3>' +
+                '<label class="fp-admin-label" for="fp-current-pin">Current PIN</label>' +
+                '<input id="fp-current-pin" class="fp-admin-text" type="password" inputmode="numeric" placeholder="Enter current PIN">' +
+
+                '<label class="fp-admin-label fp-admin-label-top" for="fp-new-pin">New PIN</label>' +
+                '<input id="fp-new-pin" class="fp-admin-text" type="password" inputmode="numeric" placeholder="Enter new PIN">' +
+
+                '<label class="fp-admin-label fp-admin-label-top" for="fp-confirm-pin">Confirm New PIN</label>' +
+                '<input id="fp-confirm-pin" class="fp-admin-text" type="password" inputmode="numeric" placeholder="Confirm new PIN">' +
+
+                '<div class="fp-admin-actions">' +
+                  '<button id="fp-save-pin" type="button">Change PIN</button>' +
+                '</div>' +
+                '<div id="fp-pin-status" class="fp-admin-note"></div>' +
               '</div>' +
 
               '<div class="fp-admin-section fp-admin-section-full">' +
@@ -162,6 +246,7 @@ document.addEventListener("DOMContentLoaded", function () {
                   '<button id="fp-apply-theme" type="button">Apply Colors</button>' +
                   '<button id="fp-reset-theme" type="button" class="fp-admin-secondary">Reset Theme</button>' +
                   '<button id="fp-reset-leaderboard" type="button" class="fp-admin-danger">Reset Leaderboard</button>' +
+                  '<button id="fp-reset-all" type="button" class="fp-admin-danger">Reset All Settings</button>' +
                 '</div>' +
               '</div>' +
 
@@ -170,24 +255,31 @@ document.addEventListener("DOMContentLoaded", function () {
 
         '</div>' +
       '</div>' +
-
     '</div>';
 
   host.appendChild(app);
 
   const el = {
+    boardShell: app.querySelector("#fp-board-shell"),
     board: app.querySelector("#fp-board"),
+    boardCenterLane: app.querySelector("#fp-board-center-lane"),
     timer: app.querySelector("#fp-timer"),
     center: app.querySelector("#fp-center"),
+    centerBackdrop: app.querySelector("#fp-center-backdrop"),
     head: app.querySelector("#fp-head"),
     copy: app.querySelector("#fp-copy"),
     start: app.querySelector("#fp-start"),
+    cancel: app.querySelector("#fp-cancel"),
     replay: app.querySelector("#fp-replay"),
     play: app.querySelector("#fp-play"),
     countdown: app.querySelector("#fp-countdown"),
     name: app.querySelector("#fp-name"),
     keys: app.querySelector("#fp-keys"),
     player: app.querySelector("#fp-player"),
+
+    headerLogoWrap: app.querySelector("#fp-header-logo-wrap"),
+    headerLogo: app.querySelector("#fp-header-logo"),
+
     adminButton: app.querySelector("#fp-admin"),
     leaderboard: app.querySelector("#fp-leaderboard"),
 
@@ -201,8 +293,10 @@ document.addEventListener("DOMContentLoaded", function () {
     adminClose: app.querySelector("#fp-admin-close"),
 
     winTargets: [...app.querySelectorAll("[data-win]")],
+    cardCountButtons: [...app.querySelectorAll("[data-card-count]")],
     countdownInput: app.querySelector("#fp-setting-countdown"),
     roundTimerInput: app.querySelector("#fp-setting-timer"),
+    idleRefreshInput: app.querySelector("#fp-setting-idle-refresh"),
     idlePreviewInput: app.querySelector("#fp-setting-idle-preview"),
     startPreviewInput: app.querySelector("#fp-setting-start-preview"),
     presetButtons: [...app.querySelectorAll(".fp-preset")],
@@ -220,7 +314,26 @@ document.addEventListener("DOMContentLoaded", function () {
 
     applyTheme: app.querySelector("#fp-apply-theme"),
     resetTheme: app.querySelector("#fp-reset-theme"),
-    resetLeaderboard: app.querySelector("#fp-reset-leaderboard")
+    resetLeaderboard: app.querySelector("#fp-reset-leaderboard"),
+    resetAll: app.querySelector("#fp-reset-all"),
+
+    logoUpload: app.querySelector("#fp-logo-upload"),
+    logoStatus: app.querySelector("#fp-logo-status"),
+    removeLogo: app.querySelector("#fp-remove-logo"),
+
+    headerLogoUpload: app.querySelector("#fp-header-logo-upload"),
+    headerLogoStatus: app.querySelector("#fp-header-logo-status"),
+    removeHeaderLogo: app.querySelector("#fp-remove-header-logo"),
+
+    bgUpload: app.querySelector("#fp-bg-upload"),
+    bgStatus: app.querySelector("#fp-bg-status"),
+    removeBg: app.querySelector("#fp-remove-bg"),
+
+    currentPin: app.querySelector("#fp-current-pin"),
+    newPin: app.querySelector("#fp-new-pin"),
+    confirmPin: app.querySelector("#fp-confirm-pin"),
+    savePin: app.querySelector("#fp-save-pin"),
+    pinStatus: app.querySelector("#fp-pin-status")
   };
 
   function shuffle(arr) {
@@ -232,7 +345,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function getScores() {
-    return JSON.parse(localStorage.getItem("fp_lb") || "[]");
+    return JSON.parse(localStorage.getItem(STORAGE_KEYS.leaderboard) || "[]");
   }
 
   function renderLeaderboard() {
@@ -254,19 +367,13 @@ document.addEventListener("DOMContentLoaded", function () {
     scores.push({ n: name, t: time });
     scores.sort(function (a, b) { return a.t - b.t; });
     scores = scores.slice(0, 5);
-    localStorage.setItem("fp_lb", JSON.stringify(scores));
+    localStorage.setItem(STORAGE_KEYS.leaderboard, JSON.stringify(scores));
     renderLeaderboard();
   }
 
   function clearLeaderboard() {
-    localStorage.removeItem("fp_lb");
+    localStorage.removeItem(STORAGE_KEYS.leaderboard);
     renderLeaderboard();
-  }
-
-  function getWinTargetLabel() {
-    return state.winTarget === "all"
-      ? "All Matches"
-      : state.winTarget + " Match" + (state.winTarget > 1 ? "es" : "");
   }
 
   function hexToRgb(hex) {
@@ -288,11 +395,11 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function isValidHex(value) {
-    return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim());
+    return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test((value || "").trim());
   }
 
   function normalizeHex(value, fallback) {
-    const trimmed = value.trim();
+    const trimmed = (value || "").trim();
     if (!isValidHex(trimmed)) return fallback;
     if (trimmed.length === 4) {
       return (
@@ -305,22 +412,129 @@ document.addEventListener("DOMContentLoaded", function () {
     return trimmed.toUpperCase();
   }
 
+  function escapeForCssUrl(value) {
+    return String(value).replace(/"/g, '\\"');
+  }
+
+  function persistSettings() {
+    const payload = {
+      winTarget: state.winTarget,
+      startCountdown: state.startCountdown,
+      roundTime: state.roundTime,
+      idleRefreshSeconds: state.idleRefreshSeconds,
+      cardCount: state.cardCount,
+      idlePreview: state.idlePreview,
+      startPreview: state.startPreview,
+      adminPin: state.adminPin,
+      theme: state.theme,
+      logoUrl: state.logoUrl,
+      headerLogoUrl: state.headerLogoUrl,
+      bgImageUrl: state.bgImageUrl
+    };
+    localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(payload));
+  }
+
+  function loadSettings() {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.settings) || "null");
+    if (!saved) return;
+
+    if (saved.winTarget === "all" || [1, 2, 3, 4].indexOf(saved.winTarget) > -1) {
+      state.winTarget = saved.winTarget;
+    }
+    if (typeof saved.startCountdown === "number") {
+      state.startCountdown = Math.max(0, Math.min(10, saved.startCountdown));
+    }
+    if (typeof saved.roundTime === "number") {
+      state.roundTime = Math.max(5, Math.min(120, saved.roundTime));
+    }
+    if (typeof saved.idleRefreshSeconds === "number") {
+      state.idleRefreshSeconds = Math.max(0, Math.min(600, saved.idleRefreshSeconds));
+    }
+    if ([6, 8, 10, 12, 16].indexOf(saved.cardCount) > -1) {
+      state.cardCount = saved.cardCount;
+    }
+    if (typeof saved.idlePreview === "boolean") state.idlePreview = saved.idlePreview;
+    if (typeof saved.startPreview === "boolean") state.startPreview = saved.startPreview;
+    if (typeof saved.adminPin === "string" && saved.adminPin.trim()) state.adminPin = saved.adminPin.trim();
+
+    if (saved.theme && typeof saved.theme === "object") {
+      state.theme = {
+        bg: normalizeHex(saved.theme.bg, DEFAULTS.theme.bg),
+        accent: normalizeHex(saved.theme.accent, DEFAULTS.theme.accent),
+        accentText: normalizeHex(saved.theme.accentText, DEFAULTS.theme.accentText),
+        card: normalizeHex(saved.theme.card, DEFAULTS.theme.card),
+        panel: normalizeHex(saved.theme.panel, DEFAULTS.theme.panel)
+      };
+    }
+
+    if (typeof saved.logoUrl === "string" && saved.logoUrl.trim()) {
+      state.logoUrl = saved.logoUrl;
+    }
+    if (typeof saved.headerLogoUrl === "string") {
+      state.headerLogoUrl = saved.headerLogoUrl;
+    }
+    if (typeof saved.bgImageUrl === "string") {
+      state.bgImageUrl = saved.bgImageUrl;
+    }
+  }
+
+  function applyLogo(url) {
+    state.logoUrl = url || DEFAULTS.logoUrl;
+    app.style.setProperty("--fp-logo-url", 'url("' + escapeForCssUrl(state.logoUrl) + '")');
+    el.logoStatus.textContent = state.logoUrl === DEFAULTS.logoUrl
+      ? "Using default card-back logo."
+      : "Custom card-back logo loaded and saved.";
+  }
+
+  function applyHeaderLogo(url) {
+    state.headerLogoUrl = url || "";
+    if (state.headerLogoUrl) {
+      el.headerLogo.src = state.headerLogoUrl;
+      el.headerLogoWrap.classList.remove("hidden");
+      el.headerLogoStatus.textContent = "Custom header logo loaded and saved.";
+    } else {
+      el.headerLogo.removeAttribute("src");
+      el.headerLogoWrap.classList.add("hidden");
+      el.headerLogoStatus.textContent = "No custom header logo loaded.";
+    }
+  }
+
+  function applyBackgroundImage(url) {
+    state.bgImageUrl = url || "";
+    if (state.bgImageUrl) {
+      app.style.setProperty("--fp-bg-image", 'url("' + escapeForCssUrl(state.bgImageUrl) + '")');
+      el.bgStatus.textContent = "Custom background image loaded and saved.";
+    } else {
+      app.style.setProperty("--fp-bg-image", "none");
+      el.bgStatus.textContent = "Using color background only.";
+    }
+  }
+
   function applyThemeColors(colors) {
-    const bg = normalizeHex(colors.bg, "#0F1115");
-    const accent = normalizeHex(colors.accent, "#FFFFFF");
-    const accentText = normalizeHex(colors.accentText, "#111111");
-    const card = normalizeHex(colors.card, "#151821");
-    const panel = normalizeHex(colors.panel, "#1C1F27");
+    const bg = normalizeHex(colors.bg, DEFAULTS.theme.bg);
+    const accent = normalizeHex(colors.accent, DEFAULTS.theme.accent);
+    const accentText = normalizeHex(colors.accentText, DEFAULTS.theme.accentText);
+    const card = normalizeHex(colors.card, DEFAULTS.theme.card);
+    const panel = normalizeHex(colors.panel, DEFAULTS.theme.panel);
+
+    state.theme = {
+      bg: bg,
+      accent: accent,
+      accentText: accentText,
+      card: card,
+      panel: panel
+    };
 
     app.style.setProperty("--fp-bg", bg);
     app.style.setProperty("--fp-text", "#FFFFFF");
     app.style.setProperty("--fp-panel", hexToRgba(panel, 0.88));
     app.style.setProperty("--fp-panel-border", hexToRgba(panel, 1));
+    app.style.setProperty("--fp-panel-solid", panel);
     app.style.setProperty("--fp-card-front", card);
     app.style.setProperty("--fp-card-front-border", hexToRgba("#FFFFFF", 0.1));
     app.style.setProperty("--fp-chip-bg", hexToRgba("#FFFFFF", 0.1));
     app.style.setProperty("--fp-chip-border", hexToRgba("#FFFFFF", 0.18));
-    app.style.setProperty("--fp-overlay", hexToRgba(bg, 0.84));
+    app.style.setProperty("--fp-overlay", hexToRgba(bg, 0.48));
     app.style.setProperty("--fp-countdown-overlay", hexToRgba(bg, 0.72));
     app.style.setProperty("--fp-key-bg", hexToRgba("#FFFFFF", 0.08));
     app.style.setProperty("--fp-key-border", hexToRgba("#FFFFFF", 0.14));
@@ -330,6 +544,7 @@ document.addEventListener("DOMContentLoaded", function () {
     app.style.setProperty("--fp-match-glow", hexToRgba(accent, 0.45));
 
     syncColorInputsFromTheme();
+    persistSettings();
   }
 
   function applyThemePreset(name) {
@@ -360,69 +575,67 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  function syncPickerAndText(picker, text, fallback) {
-    picker.value = normalizeHex(text.value || fallback, fallback);
-    text.value = picker.value;
-  }
-
   function syncColorInputsFromTheme() {
-    const styles = getComputedStyle(app);
-
-    const bg = normalizeHex(styles.getPropertyValue("--fp-bg").trim(), "#0F1115");
-    const accent = normalizeHex(styles.getPropertyValue("--fp-accent").trim(), "#FFFFFF");
-    const accentText = normalizeHex(styles.getPropertyValue("--fp-accent-text").trim(), "#111111");
-    const card = normalizeHex(styles.getPropertyValue("--fp-card-front").trim(), "#151821");
-
-    el.bgPicker.value = bg;
-    el.bgText.value = bg;
-
-    el.accentPicker.value = accent;
-    el.accentText.value = accent;
-
-    el.accentTextPicker.value = accentText;
-    el.accentTextText.value = accentText;
-
-    el.cardPicker.value = card;
-    el.cardText.value = card;
-
-    const panelFallback = "#1C1F27";
-    el.panelPicker.value = panelFallback;
-    el.panelText.value = panelFallback;
+    el.bgPicker.value = state.theme.bg;
+    el.bgText.value = state.theme.bg;
+    el.accentPicker.value = state.theme.accent;
+    el.accentText.value = state.theme.accent;
+    el.accentTextPicker.value = state.theme.accentText;
+    el.accentTextText.value = state.theme.accentText;
+    el.cardPicker.value = state.theme.card;
+    el.cardText.value = state.theme.card;
+    el.panelPicker.value = state.theme.panel;
+    el.panelText.value = state.theme.panel;
   }
 
   function updateSettingsUI() {
     el.winTargets.forEach(function (btn) {
-      btn.classList.toggle(
-        "active",
-        String(state.winTarget) === btn.getAttribute("data-win")
-      );
+      btn.classList.toggle("active", String(state.winTarget) === btn.getAttribute("data-win"));
+    });
+
+    el.cardCountButtons.forEach(function (btn) {
+      btn.classList.toggle("active", String(state.cardCount) === btn.getAttribute("data-card-count"));
     });
 
     el.countdownInput.value = state.startCountdown;
     el.roundTimerInput.value = state.roundTime;
+    el.idleRefreshInput.value = state.idleRefreshSeconds;
     el.idlePreviewInput.checked = state.idlePreview;
     el.startPreviewInput.checked = state.startPreview;
     syncColorInputsFromTheme();
+
+    el.logoStatus.textContent = state.logoUrl === DEFAULTS.logoUrl
+      ? "Using default card-back logo."
+      : "Custom card-back logo loaded and saved.";
+    el.headerLogoStatus.textContent = state.headerLogoUrl
+      ? "Custom header logo loaded and saved."
+      : "No custom header logo loaded.";
+    el.bgStatus.textContent = state.bgImageUrl
+      ? "Custom background image loaded and saved."
+      : "Using color background only.";
+
+    el.currentPin.value = "";
+    el.newPin.value = "";
+    el.confirmPin.value = "";
+    el.pinStatus.textContent = "";
   }
 
   function openAdmin() {
     el.adminModal.classList.remove("hidden");
-    if (state.adminUnlocked) {
-      el.adminLock.classList.add("hidden");
-      el.adminUI.classList.remove("hidden");
-      updateSettingsUI();
-    } else {
-      el.adminLock.classList.remove("hidden");
-      el.adminUI.classList.add("hidden");
-      el.adminPin.value = "";
-      setTimeout(function () {
-        el.adminPin.focus();
-      }, 10);
-    }
+    el.adminLock.classList.remove("hidden");
+    el.adminUI.classList.add("hidden");
+    el.adminPin.value = "";
+    setTimeout(function () {
+      el.adminPin.focus();
+    }, 10);
   }
 
   function closeAdmin() {
+    state.adminUnlocked = false;
     el.adminModal.classList.add("hidden");
+    el.adminLock.classList.remove("hidden");
+    el.adminUI.classList.add("hidden");
+    el.adminPin.value = "";
   }
 
   function unlockAdmin() {
@@ -437,8 +650,37 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
+  function getGridForCount(count) {
+    if (window.innerWidth <= 640) {
+      if (count === 6) return { cols: 3, rows: 2 };
+      if (count === 8) return { cols: 4, rows: 2 };
+      if (count === 10) return { cols: 5, rows: 2 };
+      if (count === 12) return { cols: 3, rows: 4 };
+      return { cols: 4, rows: 4 };
+    }
+
+    if (count === 6) return { cols: 3, rows: 2 };
+    if (count === 8) return { cols: 4, rows: 2 };
+    if (count === 10) return { cols: 5, rows: 2 };
+    if (count === 12) return { cols: 4, rows: 3 };
+    return { cols: 4, rows: 4 };
+  }
+
+  function updateBoardShellMode() {
+    el.boardShell.classList.toggle("play-mode", !state.gameActive && el.center.classList.contains("hidden"));
+    el.boardShell.classList.toggle("entry-open", !el.center.classList.contains("hidden"));
+  }
+
+  function applyBoardLayout() {
+    const grid = getGridForCount(state.cardCount);
+    el.board.style.gridTemplateColumns = "repeat(" + grid.cols + ", 1fr)";
+    el.board.style.gridTemplateRows = "repeat(" + grid.rows + ", 1fr)";
+    el.board.setAttribute("data-card-count", String(state.cardCount));
+  }
+
   async function buildDeck() {
-    const html = await fetch(location.href + "?t=" + Date.now(), { cache: "no-store" })
+    const cacheBust = (location.href.indexOf("?") > -1 ? "&" : "?") + "t=" + Date.now();
+    const html = await fetch(location.href + cacheBust, { cache: "no-store" })
       .then(function (response) { return response.text(); });
 
     const doc = new DOMParser().parseFromString(html, "text/html");
@@ -446,12 +688,13 @@ document.addEventListener("DOMContentLoaded", function () {
       ...new Set(
         [...doc.querySelectorAll("#gallery .grid-item img")].map(function (img) {
           return img.src;
-        })
+        }).filter(Boolean)
       )
     ];
 
+    const pairCount = state.cardCount / 2;
     shuffle(urls);
-    const chosen = urls.slice(0, 6);
+    const chosen = urls.slice(0, pairCount);
     return shuffle(chosen.concat(chosen));
   }
 
@@ -472,6 +715,24 @@ document.addEventListener("DOMContentLoaded", function () {
         loseRound();
       }
     }, 1000);
+  }
+
+  function stopIdleRefreshTimer() {
+    clearInterval(state.idleRefreshTimerId);
+    state.idleRefreshTimerId = 0;
+  }
+
+  function startIdleRefreshTimer() {
+    stopIdleRefreshTimer();
+    if (state.idleRefreshSeconds <= 0) return;
+
+    state.idleRefreshTimerId = setInterval(function () {
+      if (state.gameActive) return;
+      if (!el.adminModal.classList.contains("hidden")) return;
+      if (!el.center.classList.contains("hidden")) return;
+
+      prepareDeck(true);
+    }, state.idleRefreshSeconds * 1000);
   }
 
   function updateNameUI() {
@@ -526,6 +787,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function renderBoard(showAll) {
+    applyBoardLayout();
     el.board.innerHTML = "";
 
     state.deck.forEach(function (src) {
@@ -535,7 +797,7 @@ document.addEventListener("DOMContentLoaded", function () {
       card.innerHTML =
         '<div class="fp-inner">' +
           '<div class="fp-face fp-front"><span>Tap</span></div>' +
-          '<div class="fp-face fp-back"><img src="' + src + '"></div>' +
+          '<div class="fp-face fp-back"><img src="' + src + '" alt=""></div>' +
         '</div>';
 
       el.board.appendChild(card);
@@ -543,6 +805,7 @@ document.addEventListener("DOMContentLoaded", function () {
       card.onclick = function () {
         if (!state.gameActive) return;
         if (!el.center.classList.contains("hidden")) return;
+        if (!el.adminModal.classList.contains("hidden")) return;
         if (state.lockBoard || card.classList.contains("matched") || card === state.firstCard) return;
 
         card.classList.add("show");
@@ -577,20 +840,39 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       };
     });
+
+    updateBoardShellMode();
+  }
+
+  function animateBoardRefresh(nextShowAll) {
+    el.board.classList.add("fp-refresh-out");
+
+    setTimeout(function () {
+      renderBoard(nextShowAll);
+      el.board.classList.remove("fp-refresh-out");
+      el.board.classList.add("fp-refresh-in");
+
+      setTimeout(function () {
+        el.board.classList.remove("fp-refresh-in");
+      }, 380);
+    }, 220);
   }
 
   function showNameEntry() {
     clearTimeout(state.autoBackTimer);
+    stopIdleRefreshTimer();
     el.head.textContent = "Find the Match";
     el.copy.textContent = "Enter your name, then tap start.";
     el.center.classList.remove("hidden");
     el.keys.style.display = "";
     el.name.style.display = "";
     el.start.classList.remove("hidden");
+    el.cancel.classList.remove("hidden");
     el.replay.classList.add("hidden");
     renderLeaderboard();
     buildKeyboard();
     updateNameUI();
+    updateBoardShellMode();
   }
 
   function showResult(title, text) {
@@ -601,12 +883,20 @@ document.addEventListener("DOMContentLoaded", function () {
     el.keys.style.display = "none";
     el.name.style.display = "none";
     el.start.classList.add("hidden");
+    el.cancel.classList.add("hidden");
     el.replay.classList.remove("hidden");
     renderLeaderboard();
+    updateBoardShellMode();
 
     state.autoBackTimer = setTimeout(function () {
       goIdle();
     }, 5000);
+  }
+
+  function getWinTargetLabel() {
+    return state.winTarget === "all"
+      ? "All Matches"
+      : state.winTarget + " Match" + (state.winTarget > 1 ? "es" : "");
   }
 
   function winRound() {
@@ -651,6 +941,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     el.play.classList.remove("hidden");
+    updateBoardShellMode();
+    startIdleRefreshTimer();
   }
 
   function runCountdown(done) {
@@ -677,13 +969,21 @@ document.addEventListener("DOMContentLoaded", function () {
     }, 1000);
   }
 
-  async function prepareDeck() {
+  async function prepareDeck(withAnimation) {
     state.deck = await buildDeck();
-    renderBoard(state.idlePreview);
+    if (!state.gameActive) {
+      if (withAnimation) {
+        animateBoardRefresh(state.idlePreview);
+      } else {
+        renderBoard(state.idlePreview);
+      }
+    }
   }
 
   async function startGame() {
     if (state.playerName.length < 2) return;
+
+    stopIdleRefreshTimer();
 
     state.deck = await buildDeck();
     state.matchedPairs = 0;
@@ -694,6 +994,7 @@ document.addEventListener("DOMContentLoaded", function () {
     state.lockBoard = true;
 
     renderBoard(state.startPreview);
+    updateBoardShellMode();
 
     runCountdown(function () {
       [...el.board.children].forEach(function (card) {
@@ -703,6 +1004,7 @@ document.addEventListener("DOMContentLoaded", function () {
       state.roundStartedAt = Date.now();
       state.lockBoard = false;
       state.gameActive = true;
+      updateBoardShellMode();
       startRoundTimer();
     });
   }
@@ -721,8 +1023,90 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  function resetAllSettings() {
+    const confirmed = window.confirm("Are you sure you want to reset all settings, custom colors, custom images, logos, PIN, and leaderboard?");
+    if (!confirmed) return;
+
+    localStorage.removeItem(STORAGE_KEYS.settings);
+    localStorage.removeItem(STORAGE_KEYS.leaderboard);
+
+    state.winTarget = DEFAULTS.winTarget;
+    state.startCountdown = DEFAULTS.startCountdown;
+    state.roundTime = DEFAULTS.roundTime;
+    state.idleRefreshSeconds = DEFAULTS.idleRefreshSeconds;
+    state.cardCount = DEFAULTS.cardCount;
+    state.idlePreview = DEFAULTS.idlePreview;
+    state.startPreview = DEFAULTS.startPreview;
+    state.adminPin = DEFAULTS.adminPin;
+    state.theme = JSON.parse(JSON.stringify(DEFAULTS.theme));
+    state.logoUrl = DEFAULTS.logoUrl;
+    state.headerLogoUrl = DEFAULTS.headerLogoUrl;
+    state.bgImageUrl = DEFAULTS.bgImageUrl;
+
+    applyThemeColors(state.theme);
+    applyLogo(state.logoUrl);
+    applyHeaderLogo(state.headerLogoUrl);
+    applyBackgroundImage(state.bgImageUrl);
+    renderLeaderboard();
+    updateSettingsUI();
+    setTimerDisplay(state.roundTime);
+    startIdleRefreshTimer();
+
+    if (!state.gameActive && state.deck.length) {
+      renderBoard(state.idlePreview);
+    }
+  }
+
+  function handleImageUpload(file, onLoad) {
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function (event) {
+      const result = String(event.target.result || "");
+      if (!result) return;
+
+      try {
+        onLoad(result);
+        persistSettings();
+      } catch (error) {
+        console.error(error);
+        alert("Could not save that image. Try a smaller image file.");
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function savePin() {
+    const current = el.currentPin.value.trim();
+    const next = el.newPin.value.trim();
+    const confirm = el.confirmPin.value.trim();
+
+    if (current !== state.adminPin) {
+      el.pinStatus.textContent = "Current PIN is incorrect.";
+      return;
+    }
+
+    if (!next || next.length < 4) {
+      el.pinStatus.textContent = "New PIN must be at least 4 characters.";
+      return;
+    }
+
+    if (next !== confirm) {
+      el.pinStatus.textContent = "New PIN and confirmation do not match.";
+      return;
+    }
+
+    state.adminPin = next;
+    persistSettings();
+    el.currentPin.value = "";
+    el.newPin.value = "";
+    el.confirmPin.value = "";
+    el.pinStatus.textContent = "PIN updated successfully.";
+  }
+
   el.play.onclick = showNameEntry;
   el.start.onclick = startGame;
+  el.cancel.onclick = goIdle;
   el.replay.onclick = goIdle;
 
   el.adminButton.onclick = openAdmin;
@@ -730,21 +1114,37 @@ document.addEventListener("DOMContentLoaded", function () {
   el.adminCloseLock.onclick = closeAdmin;
   el.adminClose.onclick = closeAdmin;
   el.adminUnlock.onclick = unlockAdmin;
+
   el.adminPin.addEventListener("keydown", function (event) {
     if (event.key === "Enter") unlockAdmin();
   });
+
+  el.savePin.onclick = savePin;
 
   el.winTargets.forEach(function (button) {
     button.onclick = function () {
       const value = button.getAttribute("data-win");
       state.winTarget = value === "all" ? "all" : parseInt(value, 10);
       updateSettingsUI();
+      persistSettings();
+    };
+  });
+
+  el.cardCountButtons.forEach(function (button) {
+    button.onclick = function () {
+      state.cardCount = parseInt(button.getAttribute("data-card-count"), 10);
+      updateSettingsUI();
+      persistSettings();
+      prepareDeck(true);
     };
   });
 
   el.countdownInput.addEventListener("input", function () {
     const value = parseInt(el.countdownInput.value, 10);
-    if (!isNaN(value)) state.startCountdown = Math.max(0, Math.min(10, value));
+    if (!isNaN(value)) {
+      state.startCountdown = Math.max(0, Math.min(10, value));
+      persistSettings();
+    }
   });
 
   el.roundTimerInput.addEventListener("input", function () {
@@ -752,16 +1152,28 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!isNaN(value)) {
       state.roundTime = Math.max(5, Math.min(120, value));
       if (!state.gameActive) setTimerDisplay(state.roundTime);
+      persistSettings();
+    }
+  });
+
+  el.idleRefreshInput.addEventListener("input", function () {
+    const value = parseInt(el.idleRefreshInput.value, 10);
+    if (!isNaN(value)) {
+      state.idleRefreshSeconds = Math.max(0, Math.min(600, value));
+      persistSettings();
+      startIdleRefreshTimer();
     }
   });
 
   el.idlePreviewInput.addEventListener("change", function () {
     state.idlePreview = el.idlePreviewInput.checked;
     if (!state.gameActive && state.deck.length) renderBoard(state.idlePreview);
+    persistSettings();
   });
 
   el.startPreviewInput.addEventListener("change", function () {
     state.startPreview = el.startPreviewInput.checked;
+    persistSettings();
   });
 
   el.presetButtons.forEach(function (button) {
@@ -770,11 +1182,11 @@ document.addEventListener("DOMContentLoaded", function () {
     };
   });
 
-  bindColorPair(el.bgPicker, el.bgText, "#0F1115");
-  bindColorPair(el.accentPicker, el.accentText, "#FFFFFF");
-  bindColorPair(el.accentTextPicker, el.accentTextText, "#111111");
-  bindColorPair(el.cardPicker, el.cardText, "#151821");
-  bindColorPair(el.panelPicker, el.panelText, "#1C1F27");
+  bindColorPair(el.bgPicker, el.bgText, DEFAULTS.theme.bg);
+  bindColorPair(el.accentPicker, el.accentText, DEFAULTS.theme.accent);
+  bindColorPair(el.accentTextPicker, el.accentTextText, DEFAULTS.theme.accentText);
+  bindColorPair(el.cardPicker, el.cardText, DEFAULTS.theme.card);
+  bindColorPair(el.panelPicker, el.panelText, DEFAULTS.theme.panel);
 
   el.applyTheme.onclick = function () {
     applyThemeColors({
@@ -791,11 +1203,65 @@ document.addEventListener("DOMContentLoaded", function () {
   };
 
   el.resetLeaderboard.onclick = function () {
+    const confirmed = window.confirm("Are you sure you want to reset the leaderboard?");
+    if (!confirmed) return;
     clearLeaderboard();
   };
 
-  applyThemePreset("dark");
-  prepareDeck().then(function () {
+  el.resetAll.onclick = resetAllSettings;
+
+  el.logoUpload.addEventListener("change", function () {
+    const file = el.logoUpload.files && el.logoUpload.files[0];
+    if (file) handleImageUpload(file, applyLogo);
+    el.logoUpload.value = "";
+  });
+
+  el.headerLogoUpload.addEventListener("change", function () {
+    const file = el.headerLogoUpload.files && el.headerLogoUpload.files[0];
+    if (file) handleImageUpload(file, applyHeaderLogo);
+    el.headerLogoUpload.value = "";
+  });
+
+  el.bgUpload.addEventListener("change", function () {
+    const file = el.bgUpload.files && el.bgUpload.files[0];
+    if (file) handleImageUpload(file, applyBackgroundImage);
+    el.bgUpload.value = "";
+  });
+
+  el.removeLogo.addEventListener("click", function () {
+    const confirmed = window.confirm("Remove the custom card-back logo and revert to the default logo?");
+    if (!confirmed) return;
+    applyLogo(DEFAULTS.logoUrl);
+    persistSettings();
+  });
+
+  el.removeHeaderLogo.addEventListener("click", function () {
+    const confirmed = window.confirm("Remove the custom header logo?");
+    if (!confirmed) return;
+    applyHeaderLogo("");
+    persistSettings();
+  });
+
+  el.removeBg.addEventListener("click", function () {
+    const confirmed = window.confirm("Remove the custom background image?");
+    if (!confirmed) return;
+    applyBackgroundImage("");
+    persistSettings();
+  });
+
+  window.addEventListener("resize", function () {
+    applyBoardLayout();
+    updateBoardShellMode();
+  });
+
+  loadSettings();
+  applyThemeColors(state.theme);
+  applyLogo(state.logoUrl);
+  applyHeaderLogo(state.headerLogoUrl);
+  applyBackgroundImage(state.bgImageUrl);
+  updateSettingsUI();
+
+  prepareDeck(false).then(function () {
     setTimerDisplay(state.roundTime);
     goIdle();
   });
