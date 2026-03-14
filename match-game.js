@@ -28,6 +28,7 @@ document.addEventListener("DOMContentLoaded", function () {
     gameActive: false,
     adminUnlocked: false,
     adminPin: "1111",
+    showCursor: true,
     theme: {
       bg: "#0F1115",
       accent: "#FFFFFF",
@@ -41,6 +42,173 @@ document.addEventListener("DOMContentLoaded", function () {
   };
 
   const state = JSON.parse(JSON.stringify(DEFAULTS));
+
+  function injectGlobalUiStyles() {
+    if (document.getElementById("fp-runtime-ui-styles")) return;
+
+    const style = document.createElement("style");
+    style.id = "fp-runtime-ui-styles";
+    style.textContent = `
+      html,
+      body{
+        scrollbar-width:none !important;
+        -ms-overflow-style:none !important;
+      }
+
+      html::-webkit-scrollbar,
+      body::-webkit-scrollbar{
+        width:0 !important;
+        height:0 !important;
+        display:none !important;
+        background:transparent !important;
+      }
+
+      html::-webkit-scrollbar-thumb,
+      body::-webkit-scrollbar-thumb,
+      html::-webkit-scrollbar-track,
+      body::-webkit-scrollbar-track{
+        background:transparent !important;
+      }
+
+      #fp-admin-panel{
+        scrollbar-width:auto !important;
+        -ms-overflow-style:auto !important;
+      }
+
+      #fp-admin-panel::-webkit-scrollbar{
+        width:10px !important;
+        height:10px !important;
+        display:block !important;
+      }
+
+      #fp-admin-panel::-webkit-scrollbar-thumb{
+        background:rgba(255,255,255,.18) !important;
+        border-radius:999px !important;
+      }
+
+      #fp-admin-panel::-webkit-scrollbar-track{
+        background:rgba(255,255,255,.04) !important;
+      }
+
+      #fp-game,
+      #fp-game *{
+        cursor:none !important;
+      }
+
+      #fp-game.fp-show-cursor,
+      #fp-game.fp-show-cursor *{
+        cursor:auto !important;
+      }
+
+      #fp-head,
+      #fp-copy,
+      #fp-leaderboard,
+      #fp-leaderboard h3,
+      #fp-leaderboard div{
+        text-align:center !important;
+      }
+
+      #fp-leaderboard{
+        justify-items:center;
+      }
+
+      #fp-leaderboard div{
+        width:min(100%, 420px);
+      }
+
+      #fp-admin-pin{
+        display:none !important;
+      }
+
+      #fp-admin-pin-display{
+        margin:18px 0 0;
+        width:100%;
+        padding:16px 18px;
+        border-radius:18px;
+        background:rgba(255,255,255,.08);
+        border:1px solid rgba(255,255,255,.14);
+        font-size:26px;
+        font-weight:800;
+        letter-spacing:.18em;
+        min-height:62px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        text-transform:uppercase;
+        box-sizing:border-box;
+        text-align:center;
+      }
+
+      #fp-admin-pin-display.empty{
+        letter-spacing:.04em;
+        font-size:18px;
+        opacity:.72;
+      }
+
+      #fp-admin-pin-keys{
+        display:grid;
+        grid-template-columns:repeat(3,1fr);
+        gap:10px;
+        margin:16px 0 0;
+      }
+
+      .fp-admin-pin-key{
+        padding:14px 8px;
+        border-radius:14px;
+        border:1px solid rgba(255,255,255,.14);
+        background:rgba(255,255,255,.08);
+        color:#fff;
+        font-size:18px;
+        font-weight:800;
+        text-align:center;
+        cursor:pointer;
+        user-select:none;
+        -webkit-user-select:none;
+      }
+
+      #fp-keys{
+        display:grid;
+        grid-template-columns:repeat(10,1fr);
+        gap:10px;
+        margin:0 0 18px;
+      }
+
+      .fp-key{
+        padding:14px 8px;
+        border-radius:14px;
+        border:1px solid var(--fp-key-border);
+        background:var(--fp-key-bg);
+        color:var(--fp-text);
+        font-size:18px;
+        font-weight:800;
+        text-align:center;
+        cursor:pointer;
+        user-select:none;
+        -webkit-user-select:none;
+      }
+
+      .fp-key.bottom-key{
+        margin-top:2px;
+      }
+
+      .fp-key.bottom-left,
+      .fp-key.bottom-right{
+        grid-column:span 5;
+      }
+
+      @media (orientation: portrait){
+        #fp-keys{
+          grid-template-columns:repeat(6,1fr) !important;
+        }
+
+        .fp-key.bottom-left,
+        .fp-key.bottom-right{
+          grid-column:span 3 !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
 
   const app = document.createElement("div");
   app.id = "fp-game";
@@ -97,6 +265,8 @@ document.addEventListener("DOMContentLoaded", function () {
             '<div class="fp-admin-title">Admin Settings</div>' +
             '<p class="fp-admin-sub">Enter PIN to unlock settings.</p>' +
             '<input id="fp-admin-pin" type="password" inputmode="numeric" placeholder="PIN">' +
+            '<div id="fp-admin-pin-display" class="empty">ENTER PIN</div>' +
+            '<div id="fp-admin-pin-keys"></div>' +
             '<div class="fp-admin-actions">' +
               '<button id="fp-admin-unlock" type="button">Unlock</button>' +
               '<button id="fp-admin-close-lock" type="button" class="fp-admin-secondary">Close</button>' +
@@ -157,6 +327,10 @@ document.addEventListener("DOMContentLoaded", function () {
                   '<label class="fp-toggle">' +
                     '<input id="fp-setting-start-preview" type="checkbox">' +
                     '<span>Start photo preview</span>' +
+                  '</label>' +
+                  '<label class="fp-toggle">' +
+                    '<input id="fp-setting-show-cursor" type="checkbox">' +
+                    '<span>Show mouse cursor</span>' +
                   '</label>' +
                 '</div>' +
               '</div>' +
@@ -263,6 +437,7 @@ document.addEventListener("DOMContentLoaded", function () {
     '</div>';
 
   host.appendChild(app);
+  injectGlobalUiStyles();
 
   const el = {
     boardShell: app.querySelector("#fp-board-shell"),
@@ -295,6 +470,8 @@ document.addEventListener("DOMContentLoaded", function () {
     adminLock: app.querySelector("#fp-admin-lock"),
     adminUI: app.querySelector("#fp-admin-ui"),
     adminPin: app.querySelector("#fp-admin-pin"),
+    adminPinDisplay: app.querySelector("#fp-admin-pin-display"),
+    adminPinKeys: app.querySelector("#fp-admin-pin-keys"),
     adminUnlock: app.querySelector("#fp-admin-unlock"),
     adminCloseLock: app.querySelector("#fp-admin-close-lock"),
     adminClose: app.querySelector("#fp-admin-close"),
@@ -306,6 +483,7 @@ document.addEventListener("DOMContentLoaded", function () {
     idleRefreshInput: app.querySelector("#fp-setting-idle-refresh"),
     idlePreviewInput: app.querySelector("#fp-setting-idle-preview"),
     startPreviewInput: app.querySelector("#fp-setting-start-preview"),
+    showCursorInput: app.querySelector("#fp-setting-show-cursor"),
     presetButtons: [...app.querySelectorAll(".fp-preset")],
 
     bgPicker: app.querySelector("#fp-color-bg-picker"),
@@ -474,6 +652,7 @@ document.addEventListener("DOMContentLoaded", function () {
       idlePreview: state.idlePreview,
       startPreview: state.startPreview,
       adminPin: state.adminPin,
+      showCursor: state.showCursor,
       theme: state.theme,
       logoUrl: state.logoUrl,
       headerLogoUrl: state.headerLogoUrl,
@@ -503,6 +682,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     if (typeof saved.idlePreview === "boolean") state.idlePreview = saved.idlePreview;
     if (typeof saved.startPreview === "boolean") state.startPreview = saved.startPreview;
+    if (typeof saved.showCursor === "boolean") state.showCursor = saved.showCursor;
     if (typeof saved.adminPin === "string" && saved.adminPin.trim()) state.adminPin = saved.adminPin.trim();
 
     if (saved.theme && typeof saved.theme === "object") {
@@ -640,6 +820,10 @@ document.addEventListener("DOMContentLoaded", function () {
     el.panelText.value = state.theme.panel;
   }
 
+  function applyCursorMode() {
+    app.classList.toggle("fp-show-cursor", !!state.showCursor);
+  }
+
   function updateSettingsUI() {
     el.winTargets.forEach(function (btn) {
       btn.classList.toggle("active", String(state.winTarget) === btn.getAttribute("data-win"));
@@ -654,6 +838,7 @@ document.addEventListener("DOMContentLoaded", function () {
     el.idleRefreshInput.value = state.idleRefreshSeconds;
     el.idlePreviewInput.checked = state.idlePreview;
     el.startPreviewInput.checked = state.startPreview;
+    el.showCursorInput.checked = state.showCursor;
     syncColorInputsFromTheme();
 
     el.logoStatus.textContent = state.logoUrl === DEFAULTS.logoUrl
@@ -679,9 +864,8 @@ document.addEventListener("DOMContentLoaded", function () {
     el.adminLock.classList.remove("hidden");
     el.adminUI.classList.add("hidden");
     el.adminPin.value = "";
-    setTimeout(function () {
-      el.adminPin.focus();
-    }, 10);
+    updateAdminPinUI();
+    buildAdminPinKeyboard();
   }
 
   function closeAdmin() {
@@ -690,6 +874,7 @@ document.addEventListener("DOMContentLoaded", function () {
     el.adminLock.classList.remove("hidden");
     el.adminUI.classList.add("hidden");
     el.adminPin.value = "";
+    updateAdminPinUI();
   }
 
   function unlockAdmin() {
@@ -700,7 +885,9 @@ document.addEventListener("DOMContentLoaded", function () {
       updateSettingsUI();
     } else {
       el.adminPin.value = "";
-      el.adminPin.placeholder = "Incorrect PIN";
+      updateAdminPinUI();
+      el.adminPinDisplay.textContent = "INCORRECT PIN";
+      el.adminPinDisplay.classList.add("empty");
     }
   }
 
@@ -795,6 +982,44 @@ document.addEventListener("DOMContentLoaded", function () {
     el.start.disabled = state.playerName.length < 2;
   }
 
+  function updateAdminPinUI() {
+    const value = el.adminPin.value || "";
+    if (!value.length) {
+      el.adminPinDisplay.textContent = "ENTER PIN";
+      el.adminPinDisplay.classList.add("empty");
+    } else {
+      el.adminPinDisplay.textContent = "• ".repeat(value.length).trim();
+      el.adminPinDisplay.classList.remove("empty");
+    }
+  }
+
+  function pressAdminPinKey(value) {
+    if (value === "CLEAR") {
+      el.adminPin.value = "";
+    } else if (value === "←") {
+      el.adminPin.value = el.adminPin.value.slice(0, -1);
+    } else if (/^\d$/.test(value) && el.adminPin.value.length < 8) {
+      el.adminPin.value += value;
+    }
+
+    updateAdminPinUI();
+  }
+
+  function buildAdminPinKeyboard() {
+    const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "CLEAR", "0", "←"];
+    el.adminPinKeys.innerHTML = "";
+
+    keys.forEach(function (key) {
+      const button = document.createElement("div");
+      button.className = "fp-admin-pin-key";
+      button.textContent = key === "←" ? "⌫" : key;
+      button.onclick = function () {
+        pressAdminPinKey(key);
+      };
+      el.adminPinKeys.appendChild(button);
+    });
+  }
+
   function pressKey(value) {
     if (value === "←") {
       state.playerName = state.playerName.slice(0, -1);
@@ -816,23 +1041,39 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function buildKeyboard() {
-    const keys = [
+    const topKeys = [
       "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P",
       "A", "S", "D", "F", "G", "H", "J", "K", "L", "←",
-      "Z", "X", "C", "V", "B", "N", "M", "SPACE", "CLEAR"
+      "Z", "X", "C", "V", "B", "N", "M"
     ];
 
     el.keys.innerHTML = "";
 
-    keys.forEach(function (key) {
+    topKeys.forEach(function (key) {
       const button = document.createElement("div");
-      button.className = "fp-key" + ((key === "SPACE" || key === "CLEAR") ? " wide" : "");
+      button.className = "fp-key";
       button.textContent = key === "←" ? "⌫" : key;
       button.onclick = function () {
         pressKey(key);
       };
       el.keys.appendChild(button);
     });
+
+    const spaceButton = document.createElement("div");
+    spaceButton.className = "fp-key bottom-key bottom-left";
+    spaceButton.textContent = "SPACE";
+    spaceButton.onclick = function () {
+      pressKey("SPACE");
+    };
+    el.keys.appendChild(spaceButton);
+
+    const clearButton = document.createElement("div");
+    clearButton.className = "fp-key bottom-key bottom-right";
+    clearButton.textContent = "CLEAR";
+    clearButton.onclick = function () {
+      pressKey("CLEAR");
+    };
+    el.keys.appendChild(clearButton);
   }
 
   function shouldWinNow() {
@@ -1093,6 +1334,7 @@ document.addEventListener("DOMContentLoaded", function () {
     state.idlePreview = DEFAULTS.idlePreview;
     state.startPreview = DEFAULTS.startPreview;
     state.adminPin = DEFAULTS.adminPin;
+    state.showCursor = DEFAULTS.showCursor;
     state.theme = JSON.parse(JSON.stringify(DEFAULTS.theme));
     state.logoUrl = DEFAULTS.logoUrl;
     state.headerLogoUrl = DEFAULTS.headerLogoUrl;
@@ -1104,6 +1346,7 @@ document.addEventListener("DOMContentLoaded", function () {
     applyBackgroundImage(state.bgImageUrl);
     renderLeaderboard();
     updateSettingsUI();
+    applyCursorMode();
     setTimerDisplay(state.roundTime);
     startIdleRefreshTimer();
 
@@ -1231,6 +1474,12 @@ document.addEventListener("DOMContentLoaded", function () {
     persistSettings();
   });
 
+  el.showCursorInput.addEventListener("change", function () {
+    state.showCursor = el.showCursorInput.checked;
+    applyCursorMode();
+    persistSettings();
+  });
+
   el.presetButtons.forEach(function (button) {
     button.onclick = function () {
       applyThemePreset(button.getAttribute("data-preset"));
@@ -1316,6 +1565,9 @@ document.addEventListener("DOMContentLoaded", function () {
   applyBackgroundImage(state.bgImageUrl);
   updateSettingsUI();
   renderLeaderboard();
+  updateAdminPinUI();
+  buildAdminPinKeyboard();
+  applyCursorMode();
 
   prepareDeck(false).then(function () {
     setTimerDisplay(state.roundTime);
