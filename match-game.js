@@ -15,7 +15,10 @@ document.addEventListener("DOMContentLoaded", function () {
           '<div id="fp-title">Find the Match</div>' +
           '<div id="fp-player"></div>' +
         '</div>' +
-        '<div id="fp-timer">20</div>' +
+        '<div id="fp-top-right">' +
+          '<div id="fp-timer">20</div>' +
+          '<button id="fp-admin" type="button" aria-label="Admin Settings">⚙</button>' +
+        '</div>' +
       '</div>' +
       '<div id="fp-board"></div>' +
       '<div id="fp-center">' +
@@ -45,6 +48,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let nm = g.querySelector("#fp-name");
   let ky = g.querySelector("#fp-keys");
   let pl = g.querySelector("#fp-player");
+  let ad = g.querySelector("#fp-admin");
 
   let t = 20;
   let tm = 0;
@@ -95,6 +99,33 @@ document.addEventListener("DOMContentLoaded", function () {
 
     localStorage.setItem("fp_lb", JSON.stringify(s));
     rl();
+  }
+
+  function clearLeaderboard() {
+    localStorage.removeItem("fp_lb");
+    rl();
+  }
+
+  function adminMenu() {
+    let pin = prompt("Enter admin PIN");
+    if (pin === null) return;
+
+    if (pin !== "1111") {
+      alert("Incorrect PIN");
+      return;
+    }
+
+    let action = prompt("Enter 1 to reset leaderboard");
+    if (action === null) return;
+
+    if (action === "1") {
+      if (confirm("Reset leaderboard?")) {
+        clearLeaderboard();
+        alert("Leaderboard reset");
+      }
+    } else {
+      alert("No action selected");
+    }
   }
 
   async function pk() {
@@ -304,6 +335,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   s.onclick = build;
   r.onclick = idle;
+  ad.onclick = adminMenu;
 
   idle();
 });
