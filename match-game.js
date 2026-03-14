@@ -36,7 +36,7 @@ document.addEventListener("DOMContentLoaded", function () {
       panel: "#1C1F27"
     },
     logoUrl: "https://theboothkit.com/wp-content/uploads/2026/02/Site-Logo.png",
-    headerLogoUrl: "",
+    headerLogoUrl: "https://theboothkit.com/wp-content/uploads/2026/02/Site-Logo.png",
     bgImageUrl: ""
   };
 
@@ -45,17 +45,22 @@ document.addEventListener("DOMContentLoaded", function () {
   const app = document.createElement("div");
   app.id = "fp-game";
   app.innerHTML =
+    '<div id="fp-first-place-banner"></div>' +
+
     '<div id="fp-wrap">' +
       '<div id="fp-top">' +
         '<div id="fp-brand">' +
-          '<div id="fp-header-logo-wrap" class="hidden"><img id="fp-header-logo" alt="Header Logo"></div>' +
-          '<div>' +
+          '<div id="fp-header-logo-wrap"><img id="fp-header-logo" alt="Header Logo"></div>' +
+          '<div id="fp-title-block">' +
             '<div id="fp-title">Find the Match</div>' +
             '<div id="fp-player"></div>' +
           '</div>' +
         '</div>' +
         '<div id="fp-top-right">' +
-          '<div id="fp-timer">20</div>' +
+          '<div id="fp-top-meta">' +
+            '<div id="fp-timer">20</div>' +
+            '<div id="fp-live-leaderboard"></div>' +
+          '</div>' +
           '<button id="fp-admin" type="button" aria-label="Admin Settings">⚙</button>' +
         '</div>' +
       '</div>' +
@@ -170,9 +175,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 '<label class="fp-admin-label" for="fp-header-logo-upload">Header Logo Upload</label>' +
                 '<input id="fp-header-logo-upload" type="file" accept="image/*" class="fp-admin-file">' +
-                '<div id="fp-header-logo-status" class="fp-admin-note">No custom header logo loaded.</div>' +
+                '<div id="fp-header-logo-status" class="fp-admin-note">Using default header logo.</div>' +
                 '<div class="fp-admin-actions">' +
-                  '<button id="fp-remove-header-logo" type="button" class="fp-admin-secondary">Remove Header Logo</button>' +
+                  '<button id="fp-remove-header-logo" type="button" class="fp-admin-secondary">Reset Header Logo</button>' +
                 '</div>' +
 
                 '<label class="fp-admin-label fp-admin-label-top" for="fp-logo-upload">Card Back Logo Upload</label>' +
@@ -276,6 +281,8 @@ document.addEventListener("DOMContentLoaded", function () {
     name: app.querySelector("#fp-name"),
     keys: app.querySelector("#fp-keys"),
     player: app.querySelector("#fp-player"),
+    liveLeaderboard: app.querySelector("#fp-live-leaderboard"),
+    firstPlaceBanner: app.querySelector("#fp-first-place-banner"),
 
     headerLogoWrap: app.querySelector("#fp-header-logo-wrap"),
     headerLogo: app.querySelector("#fp-header-logo"),
@@ -348,8 +355,27 @@ document.addEventListener("DOMContentLoaded", function () {
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.leaderboard) || "[]");
   }
 
+  function renderLiveLeaderboard() {
+    const scores = getScores();
+    if (!scores.length) {
+      el.liveLeaderboard.innerHTML = "";
+      return;
+    }
+
+    const top = scores.slice(0, 3);
+    let html = "";
+    top.forEach(function (item, index) {
+      const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉";
+      const cls = index === 0 ? "fp-live-score gold" : "fp-live-score";
+      html += '<div class="' + cls + '">' + medal + " " + item.n + " " + item.t.toFixed(2) + "s</div>";
+    });
+    el.liveLeaderboard.innerHTML = html;
+  }
+
   function renderLeaderboard() {
     const scores = getScores();
+    renderLiveLeaderboard();
+
     if (!scores.length) {
       el.leaderboard.innerHTML = "";
       return;
@@ -362,13 +388,35 @@ document.addEventListener("DOMContentLoaded", function () {
     el.leaderboard.innerHTML = html;
   }
 
+  function flashFirstPlaceBanner(name, time) {
+    el.firstPlaceBanner.textContent = "New 1st Place! " + name + " – " + time.toFixed(2) + "s";
+    el.firstPlaceBanner.classList.remove("show");
+    void el.firstPlaceBanner.offsetWidth;
+    el.firstPlaceBanner.classList.add("show");
+  }
+
   function saveScore(name, time) {
-    let scores = getScores();
+    const oldScores = getScores();
+    const oldFirst = oldScores.length ? oldScores[0] : null;
+
+    let scores = oldScores.slice();
     scores.push({ n: name, t: time });
     scores.sort(function (a, b) { return a.t - b.t; });
     scores = scores.slice(0, 5);
     localStorage.setItem(STORAGE_KEYS.leaderboard, JSON.stringify(scores));
+
+    const newFirst = scores.length ? scores[0] : null;
+    const isNewFirst =
+      newFirst &&
+      newFirst.n === name &&
+      Math.abs(newFirst.t - time) < 0.001 &&
+      (!oldFirst || time < oldFirst.t);
+
     renderLeaderboard();
+
+    if (isNewFirst) {
+      flashFirstPlaceBanner(name, time);
+    }
   }
 
   function clearLeaderboard() {
@@ -487,15 +535,19 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function applyHeaderLogo(url) {
-    state.headerLogoUrl = url || "";
+    state.headerLogoUrl = url || DEFAULTS.headerLogoUrl;
     if (state.headerLogoUrl) {
       el.headerLogo.src = state.headerLogoUrl;
       el.headerLogoWrap.classList.remove("hidden");
-      el.headerLogoStatus.textContent = "Custom header logo loaded and saved.";
+      el.headerLogoStatus.textContent =
+        state.headerLogoUrl === DEFAULTS.headerLogoUrl
+          ? "Using default header logo."
+          : "Custom header logo loaded and saved.";
     } else {
-      el.headerLogo.removeAttribute("src");
-      el.headerLogoWrap.classList.add("hidden");
-      el.headerLogoStatus.textContent = "No custom header logo loaded.";
+      el.headerLogo.src = DEFAULTS.headerLogoUrl;
+      el.headerLogoWrap.classList.remove("hidden");
+      el.headerLogoStatus.textContent = "Using default header logo.";
+      state.headerLogoUrl = DEFAULTS.headerLogoUrl;
     }
   }
 
@@ -607,9 +659,11 @@ document.addEventListener("DOMContentLoaded", function () {
     el.logoStatus.textContent = state.logoUrl === DEFAULTS.logoUrl
       ? "Using default card-back logo."
       : "Custom card-back logo loaded and saved.";
-    el.headerLogoStatus.textContent = state.headerLogoUrl
-      ? "Custom header logo loaded and saved."
-      : "No custom header logo loaded.";
+
+    el.headerLogoStatus.textContent = state.headerLogoUrl === DEFAULTS.headerLogoUrl
+      ? "Using default header logo."
+      : "Custom header logo loaded and saved.";
+
     el.bgStatus.textContent = state.bgImageUrl
       ? "Custom background image loaded and saved."
       : "Using color background only.";
@@ -942,6 +996,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     el.play.classList.remove("hidden");
     updateBoardShellMode();
+    renderLiveLeaderboard();
     startIdleRefreshTimer();
   }
 
@@ -1236,9 +1291,9 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   el.removeHeaderLogo.addEventListener("click", function () {
-    const confirmed = window.confirm("Remove the custom header logo?");
+    const confirmed = window.confirm("Reset the header logo to the default BoothKit logo?");
     if (!confirmed) return;
-    applyHeaderLogo("");
+    applyHeaderLogo(DEFAULTS.headerLogoUrl);
     persistSettings();
   });
 
@@ -1257,9 +1312,10 @@ document.addEventListener("DOMContentLoaded", function () {
   loadSettings();
   applyThemeColors(state.theme);
   applyLogo(state.logoUrl);
-  applyHeaderLogo(state.headerLogoUrl);
+  applyHeaderLogo(state.headerLogoUrl || DEFAULTS.headerLogoUrl);
   applyBackgroundImage(state.bgImageUrl);
   updateSettingsUI();
+  renderLeaderboard();
 
   prepareDeck(false).then(function () {
     setTimerDisplay(state.roundTime);
