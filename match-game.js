@@ -1,24 +1,30 @@
 document.addEventListener("DOMContentLoaded", function () {
-  let h = document.querySelector("#content");
-  let i = [...document.querySelectorAll("#gallery .grid-item img")];
+  const host = document.querySelector("#content");
+  const galleryImgs = [...document.querySelectorAll("#gallery .grid-item img")];
+  if (!host || galleryImgs.length < 6) return;
 
-  if (!h || i.length < 6) return;
+  const state = {
+    playerName: "",
+    autoBackTimer: 0,
+    roundTimerId: 0,
+    firstCard: null,
+    lockBoard: false,
+    roundStartedAt: 0,
+    deck: [],
+    matchedPairs: 0,
+    idlePreview: true,
+    startPreview: true,
+    winTarget: 1, // 1,2,3,4,"all"
+    startCountdown: 3,
+    roundTime: 20,
+    gameActive: false,
+    adminUnlocked: false,
+    adminPin: "1111"
+  };
 
-  let g = document.createElement("div");
-  let pn = "";
-  let autoBack = 0;
-  let deck = [];
-  let matchedPairs = 0;
-
-  let idlePreview = true;
-  let startPreview = true;
-  let winTarget = 1; // 1,2,3,4 or "all"
-  let startCountdown = 3;
-  let roundTime = 20;
-  let gameActive = false;
-
-  g.id = "fp-game";
-  g.innerHTML =
+  const app = document.createElement("div");
+  app.id = "fp-game";
+  app.innerHTML =
     '<div id="fp-wrap">' +
       '<div id="fp-top">' +
         '<div>' +
@@ -30,8 +36,11 @@ document.addEventListener("DOMContentLoaded", function () {
           '<button id="fp-admin" type="button" aria-label="Admin Settings">⚙</button>' +
         '</div>' +
       '</div>' +
+
       '<div id="fp-board"></div>' +
+
       '<button id="fp-play" type="button">Play</button>' +
+
       '<div id="fp-center" class="hidden">' +
         '<div id="fp-card">' +
           '<h2 id="fp-head">Find the Match</h2>' +
@@ -43,391 +52,527 @@ document.addEventListener("DOMContentLoaded", function () {
           '<div id="fp-leaderboard"></div>' +
         '</div>' +
       '</div>' +
+
       '<div id="fp-countdown" class="hidden">3</div>' +
+
+      '<div id="fp-admin-modal" class="hidden">' +
+        '<div id="fp-admin-backdrop"></div>' +
+        '<div id="fp-admin-panel">' +
+
+          '<div id="fp-admin-lock">' +
+            '<div class="fp-admin-title">Admin Settings</div>' +
+            '<p class="fp-admin-sub">Enter PIN to unlock settings.</p>' +
+            '<input id="fp-admin-pin" type="password" inputmode="numeric" placeholder="PIN">' +
+            '<div class="fp-admin-actions">' +
+              '<button id="fp-admin-unlock" type="button">Unlock</button>' +
+              '<button id="fp-admin-close-lock" type="button" class="fp-admin-secondary">Close</button>' +
+            '</div>' +
+          '</div>' +
+
+          '<div id="fp-admin-ui" class="hidden">' +
+            '<div class="fp-admin-header">' +
+              '<div>' +
+                '<div class="fp-admin-title">Admin Settings</div>' +
+                '<p class="fp-admin-sub">Adjust gameplay, visuals, and leaderboard.</p>' +
+              '</div>' +
+              '<button id="fp-admin-close" type="button" class="fp-admin-icon">✕</button>' +
+            '</div>' +
+
+            '<div class="fp-admin-grid">' +
+
+              '<div class="fp-admin-section">' +
+                '<h3>Gameplay</h3>' +
+                '<label class="fp-admin-label">Win Target</label>' +
+                '<div id="fp-win-targets" class="fp-chip-group">' +
+                  '<button type="button" class="fp-chip" data-win="1">1 Match</button>' +
+                  '<button type="button" class="fp-chip" data-win="2">2 Matches</button>' +
+                  '<button type="button" class="fp-chip" data-win="3">3 Matches</button>' +
+                  '<button type="button" class="fp-chip" data-win="4">4 Matches</button>' +
+                  '<button type="button" class="fp-chip" data-win="all">All</button>' +
+                '</div>' +
+
+                '<div class="fp-admin-row-2">' +
+                  '<div>' +
+                    '<label class="fp-admin-label" for="fp-setting-countdown">Countdown</label>' +
+                    '<input id="fp-setting-countdown" class="fp-admin-number" type="number" min="0" max="10" step="1">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label class="fp-admin-label" for="fp-setting-timer">Round Timer</label>' +
+                    '<input id="fp-setting-timer" class="fp-admin-number" type="number" min="5" max="120" step="1">' +
+                  '</div>' +
+                '</div>' +
+
+                '<div class="fp-toggle-row">' +
+                  '<label class="fp-toggle">' +
+                    '<input id="fp-setting-idle-preview" type="checkbox">' +
+                    '<span>Idle photo preview</span>' +
+                  '</label>' +
+                  '<label class="fp-toggle">' +
+                    '<input id="fp-setting-start-preview" type="checkbox">' +
+                    '<span>Start photo preview</span>' +
+                  '</label>' +
+                '</div>' +
+              '</div>' +
+
+              '<div class="fp-admin-section">' +
+                '<h3>Theme Presets</h3>' +
+                '<div class="fp-chip-group">' +
+                  '<button type="button" class="fp-chip fp-preset" data-preset="dark">Dark Default</button>' +
+                  '<button type="button" class="fp-chip fp-preset" data-preset="purple">BoothKit Purple</button>' +
+                  '<button type="button" class="fp-chip fp-preset" data-preset="gold">Gold Luxe</button>' +
+                '</div>' +
+              '</div>' +
+
+              '<div class="fp-admin-section fp-admin-section-full">' +
+                '<h3>Custom Colors</h3>' +
+
+                '<div class="fp-color-grid">' +
+                  '<div class="fp-color-row">' +
+                    '<label>Background</label>' +
+                    '<input type="color" id="fp-color-bg-picker">' +
+                    '<input type="text" id="fp-color-bg-text" class="fp-admin-text" placeholder="#0F1115">' +
+                  '</div>' +
+
+                  '<div class="fp-color-row">' +
+                    '<label>Accent / Buttons</label>' +
+                    '<input type="color" id="fp-color-accent-picker">' +
+                    '<input type="text" id="fp-color-accent-text" class="fp-admin-text" placeholder="#FFFFFF">' +
+                  '</div>' +
+
+                  '<div class="fp-color-row">' +
+                    '<label>Accent Text</label>' +
+                    '<input type="color" id="fp-color-accent-text-picker">' +
+                    '<input type="text" id="fp-color-accent-text-text" class="fp-admin-text" placeholder="#111111">' +
+                  '</div>' +
+
+                  '<div class="fp-color-row">' +
+                    '<label>Card Front</label>' +
+                    '<input type="color" id="fp-color-card-picker">' +
+                    '<input type="text" id="fp-color-card-text" class="fp-admin-text" placeholder="#151821">' +
+                  '</div>' +
+
+                  '<div class="fp-color-row">' +
+                    '<label>Popup Panel</label>' +
+                    '<input type="color" id="fp-color-panel-picker">' +
+                    '<input type="text" id="fp-color-panel-text" class="fp-admin-text" placeholder="#1C1F27">' +
+                  '</div>' +
+                '</div>' +
+
+                '<div class="fp-admin-actions fp-admin-actions-wrap">' +
+                  '<button id="fp-apply-theme" type="button">Apply Colors</button>' +
+                  '<button id="fp-reset-theme" type="button" class="fp-admin-secondary">Reset Theme</button>' +
+                  '<button id="fp-reset-leaderboard" type="button" class="fp-admin-danger">Reset Leaderboard</button>' +
+                '</div>' +
+              '</div>' +
+
+            '</div>' +
+          '</div>' +
+
+        '</div>' +
+      '</div>' +
+
     '</div>';
 
-  h.appendChild(g);
+  host.appendChild(app);
 
-  let b = g.querySelector("#fp-board");
-  let tE = g.querySelector("#fp-timer");
-  let c = g.querySelector("#fp-center");
-  let hd = g.querySelector("#fp-head");
-  let cp = g.querySelector("#fp-copy");
-  let s = g.querySelector("#fp-start");
-  let r = g.querySelector("#fp-replay");
-  let p = g.querySelector("#fp-play");
-  let cd = g.querySelector("#fp-countdown");
-  let nm = g.querySelector("#fp-name");
-  let ky = g.querySelector("#fp-keys");
-  let pl = g.querySelector("#fp-player");
-  let ad = g.querySelector("#fp-admin");
+  const el = {
+    board: app.querySelector("#fp-board"),
+    timer: app.querySelector("#fp-timer"),
+    center: app.querySelector("#fp-center"),
+    head: app.querySelector("#fp-head"),
+    copy: app.querySelector("#fp-copy"),
+    start: app.querySelector("#fp-start"),
+    replay: app.querySelector("#fp-replay"),
+    play: app.querySelector("#fp-play"),
+    countdown: app.querySelector("#fp-countdown"),
+    name: app.querySelector("#fp-name"),
+    keys: app.querySelector("#fp-keys"),
+    player: app.querySelector("#fp-player"),
+    adminButton: app.querySelector("#fp-admin"),
+    leaderboard: app.querySelector("#fp-leaderboard"),
 
-  let t = roundTime;
-  let tm = 0;
-  let f = null;
-  let l = 0;
-  let rs = 0;
+    adminModal: app.querySelector("#fp-admin-modal"),
+    adminBackdrop: app.querySelector("#fp-admin-backdrop"),
+    adminLock: app.querySelector("#fp-admin-lock"),
+    adminUI: app.querySelector("#fp-admin-ui"),
+    adminPin: app.querySelector("#fp-admin-pin"),
+    adminUnlock: app.querySelector("#fp-admin-unlock"),
+    adminCloseLock: app.querySelector("#fp-admin-close-lock"),
+    adminClose: app.querySelector("#fp-admin-close"),
 
-  function sh(a) {
-    for (let i = a.length - 1; i > 0; i--) {
-      let j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
+    winTargets: [...app.querySelectorAll("[data-win]")],
+    countdownInput: app.querySelector("#fp-setting-countdown"),
+    roundTimerInput: app.querySelector("#fp-setting-timer"),
+    idlePreviewInput: app.querySelector("#fp-setting-idle-preview"),
+    startPreviewInput: app.querySelector("#fp-setting-start-preview"),
+    presetButtons: [...app.querySelectorAll(".fp-preset")],
+
+    bgPicker: app.querySelector("#fp-color-bg-picker"),
+    bgText: app.querySelector("#fp-color-bg-text"),
+    accentPicker: app.querySelector("#fp-color-accent-picker"),
+    accentText: app.querySelector("#fp-color-accent-text"),
+    accentTextPicker: app.querySelector("#fp-color-accent-text-picker"),
+    accentTextText: app.querySelector("#fp-color-accent-text-text"),
+    cardPicker: app.querySelector("#fp-color-card-picker"),
+    cardText: app.querySelector("#fp-color-card-text"),
+    panelPicker: app.querySelector("#fp-color-panel-picker"),
+    panelText: app.querySelector("#fp-color-panel-text"),
+
+    applyTheme: app.querySelector("#fp-apply-theme"),
+    resetTheme: app.querySelector("#fp-reset-theme"),
+    resetLeaderboard: app.querySelector("#fp-reset-leaderboard")
+  };
+
+  function shuffle(arr) {
+    for (let idx = arr.length - 1; idx > 0; idx--) {
+      const rand = Math.floor(Math.random() * (idx + 1));
+      [arr[idx], arr[rand]] = [arr[rand], arr[idx]];
     }
-    return a;
+    return arr;
   }
 
-  function gs() {
+  function getScores() {
     return JSON.parse(localStorage.getItem("fp_lb") || "[]");
   }
 
-  function rl() {
-    let e = document.querySelector("#fp-leaderboard");
-    let s = gs();
-
-    if (!e) return;
-
-    if (!s.length) {
-      e.innerHTML = "";
+  function renderLeaderboard() {
+    const scores = getScores();
+    if (!scores.length) {
+      el.leaderboard.innerHTML = "";
       return;
     }
 
-    let h = "<h3>Leaderboard</h3>";
-
-    s.forEach(function (v, i) {
-      h += "<div>" + (i + 1) + ". " + v.n + " – " + v.t.toFixed(2) + "s</div>";
+    let html = "<h3>Leaderboard</h3>";
+    scores.forEach(function (item, index) {
+      html += "<div>" + (index + 1) + ". " + item.n + " – " + item.t.toFixed(2) + "s</div>";
     });
-
-    e.innerHTML = h;
+    el.leaderboard.innerHTML = html;
   }
 
-  function ss(n, t) {
-    let s = gs();
-
-    s.push({ n: n, t: t });
-    s.sort(function (a, b) {
-      return a.t - b.t;
-    });
-    s = s.slice(0, 5);
-
-    localStorage.setItem("fp_lb", JSON.stringify(s));
-    rl();
+  function saveScore(name, time) {
+    let scores = getScores();
+    scores.push({ n: name, t: time });
+    scores.sort(function (a, b) { return a.t - b.t; });
+    scores = scores.slice(0, 5);
+    localStorage.setItem("fp_lb", JSON.stringify(scores));
+    renderLeaderboard();
   }
 
   function clearLeaderboard() {
     localStorage.removeItem("fp_lb");
-    rl();
+    renderLeaderboard();
   }
 
   function getWinTargetLabel() {
-    return winTarget === "all" ? "All Matches" : winTarget + " Match" + (winTarget > 1 ? "es" : "");
+    return state.winTarget === "all"
+      ? "All Matches"
+      : state.winTarget + " Match" + (state.winTarget > 1 ? "es" : "");
+  }
+
+  function hexToRgb(hex) {
+    const clean = hex.replace("#", "").trim();
+    const normalized = clean.length === 3
+      ? clean.split("").map(function (c) { return c + c; }).join("")
+      : clean;
+    const intVal = parseInt(normalized, 16);
+    return {
+      r: (intVal >> 16) & 255,
+      g: (intVal >> 8) & 255,
+      b: intVal & 255
+    };
+  }
+
+  function hexToRgba(hex, alpha) {
+    const rgb = hexToRgb(hex);
+    return "rgba(" + rgb.r + "," + rgb.g + "," + rgb.b + "," + alpha + ")";
+  }
+
+  function isValidHex(value) {
+    return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim());
+  }
+
+  function normalizeHex(value, fallback) {
+    const trimmed = value.trim();
+    if (!isValidHex(trimmed)) return fallback;
+    if (trimmed.length === 4) {
+      return (
+        "#" +
+        trimmed[1] + trimmed[1] +
+        trimmed[2] + trimmed[2] +
+        trimmed[3] + trimmed[3]
+      ).toUpperCase();
+    }
+    return trimmed.toUpperCase();
+  }
+
+  function applyThemeColors(colors) {
+    const bg = normalizeHex(colors.bg, "#0F1115");
+    const accent = normalizeHex(colors.accent, "#FFFFFF");
+    const accentText = normalizeHex(colors.accentText, "#111111");
+    const card = normalizeHex(colors.card, "#151821");
+    const panel = normalizeHex(colors.panel, "#1C1F27");
+
+    app.style.setProperty("--fp-bg", bg);
+    app.style.setProperty("--fp-text", "#FFFFFF");
+    app.style.setProperty("--fp-panel", hexToRgba(panel, 0.88));
+    app.style.setProperty("--fp-panel-border", hexToRgba(panel, 1));
+    app.style.setProperty("--fp-card-front", card);
+    app.style.setProperty("--fp-card-front-border", hexToRgba("#FFFFFF", 0.1));
+    app.style.setProperty("--fp-chip-bg", hexToRgba("#FFFFFF", 0.1));
+    app.style.setProperty("--fp-chip-border", hexToRgba("#FFFFFF", 0.18));
+    app.style.setProperty("--fp-overlay", hexToRgba(bg, 0.84));
+    app.style.setProperty("--fp-countdown-overlay", hexToRgba(bg, 0.72));
+    app.style.setProperty("--fp-key-bg", hexToRgba("#FFFFFF", 0.08));
+    app.style.setProperty("--fp-key-border", hexToRgba("#FFFFFF", 0.14));
+    app.style.setProperty("--fp-accent", accent);
+    app.style.setProperty("--fp-accent-text", accentText);
+    app.style.setProperty("--fp-match-ring", hexToRgba(accent, 0.95));
+    app.style.setProperty("--fp-match-glow", hexToRgba(accent, 0.45));
+
+    syncColorInputsFromTheme();
   }
 
   function applyThemePreset(name) {
-    if (name === "1") {
-      g.style.setProperty("--fp-bg", "#0f1115");
-      g.style.setProperty("--fp-text", "#ffffff");
-      g.style.setProperty("--fp-panel", "rgba(255,255,255,.08)");
-      g.style.setProperty("--fp-panel-border", "rgba(255,255,255,.14)");
-      g.style.setProperty("--fp-card-front", "#151821");
-      g.style.setProperty("--fp-card-front-border", "rgba(255,255,255,.10)");
-      g.style.setProperty("--fp-chip-bg", "rgba(255,255,255,.10)");
-      g.style.setProperty("--fp-chip-border", "rgba(255,255,255,.18)");
-      g.style.setProperty("--fp-overlay", "rgba(15,17,21,.84)");
-      g.style.setProperty("--fp-countdown-overlay", "rgba(15,17,21,.72)");
-      g.style.setProperty("--fp-key-bg", "rgba(255,255,255,.08)");
-      g.style.setProperty("--fp-key-border", "rgba(255,255,255,.14)");
-      g.style.setProperty("--fp-accent", "#ffffff");
-      g.style.setProperty("--fp-accent-text", "#111111");
-      g.style.setProperty("--fp-match-ring", "rgba(230,191,92,.95)");
-      g.style.setProperty("--fp-match-glow", "rgba(230,191,92,.45)");
-      alert("Theme set to Dark Default");
-    } else if (name === "2") {
-      g.style.setProperty("--fp-bg", "#0d1320");
-      g.style.setProperty("--fp-text", "#f4f7ff");
-      g.style.setProperty("--fp-panel", "rgba(99,102,241,.16)");
-      g.style.setProperty("--fp-panel-border", "rgba(165,180,252,.24)");
-      g.style.setProperty("--fp-card-front", "#11182b");
-      g.style.setProperty("--fp-card-front-border", "rgba(165,180,252,.18)");
-      g.style.setProperty("--fp-chip-bg", "rgba(99,102,241,.18)");
-      g.style.setProperty("--fp-chip-border", "rgba(165,180,252,.24)");
-      g.style.setProperty("--fp-overlay", "rgba(13,19,32,.84)");
-      g.style.setProperty("--fp-countdown-overlay", "rgba(13,19,32,.72)");
-      g.style.setProperty("--fp-key-bg", "rgba(99,102,241,.14)");
-      g.style.setProperty("--fp-key-border", "rgba(165,180,252,.24)");
-      g.style.setProperty("--fp-accent", "#6852F4");
-      g.style.setProperty("--fp-accent-text", "#ffffff");
-      g.style.setProperty("--fp-match-ring", "rgba(104,82,244,.95)");
-      g.style.setProperty("--fp-match-glow", "rgba(104,82,244,.45)");
-      alert("Theme set to BoothKit Purple");
-    } else if (name === "3") {
-      g.style.setProperty("--fp-bg", "#101010");
-      g.style.setProperty("--fp-text", "#f7f3ea");
-      g.style.setProperty("--fp-panel", "rgba(212,175,55,.10)");
-      g.style.setProperty("--fp-panel-border", "rgba(212,175,55,.20)");
-      g.style.setProperty("--fp-card-front", "#171717");
-      g.style.setProperty("--fp-card-front-border", "rgba(212,175,55,.15)");
-      g.style.setProperty("--fp-chip-bg", "rgba(212,175,55,.10)");
-      g.style.setProperty("--fp-chip-border", "rgba(212,175,55,.20)");
-      g.style.setProperty("--fp-overlay", "rgba(16,16,16,.84)");
-      g.style.setProperty("--fp-countdown-overlay", "rgba(16,16,16,.72)");
-      g.style.setProperty("--fp-key-bg", "rgba(212,175,55,.08)");
-      g.style.setProperty("--fp-key-border", "rgba(212,175,55,.20)");
-      g.style.setProperty("--fp-accent", "#d4af37");
-      g.style.setProperty("--fp-accent-text", "#111111");
-      g.style.setProperty("--fp-match-ring", "rgba(212,175,55,.95)");
-      g.style.setProperty("--fp-match-glow", "rgba(212,175,55,.45)");
-      alert("Theme set to Gold Luxe");
+    if (name === "dark") {
+      applyThemeColors({
+        bg: "#0F1115",
+        accent: "#FFFFFF",
+        accentText: "#111111",
+        card: "#151821",
+        panel: "#1C1F27"
+      });
+    } else if (name === "purple") {
+      applyThemeColors({
+        bg: "#0D1320",
+        accent: "#6852F4",
+        accentText: "#FFFFFF",
+        card: "#11182B",
+        panel: "#1A2040"
+      });
+    } else if (name === "gold") {
+      applyThemeColors({
+        bg: "#101010",
+        accent: "#D4AF37",
+        accentText: "#111111",
+        card: "#171717",
+        panel: "#23201A"
+      });
     }
   }
 
-  function setCustomTheme() {
-    let bg = prompt("Background color", getComputedStyle(g).getPropertyValue("--fp-bg").trim() || "#0f1115");
-    if (bg === null) return;
-
-    let accent = prompt("Accent/button color", getComputedStyle(g).getPropertyValue("--fp-accent").trim() || "#ffffff");
-    if (accent === null) return;
-
-    let accentText = prompt("Accent/button text color", getComputedStyle(g).getPropertyValue("--fp-accent-text").trim() || "#111111");
-    if (accentText === null) return;
-
-    let cardFront = prompt("Card front color", getComputedStyle(g).getPropertyValue("--fp-card-front").trim() || "#151821");
-    if (cardFront === null) return;
-
-    let panel = prompt("Popup panel color", getComputedStyle(g).getPropertyValue("--fp-panel").trim() || "rgba(255,255,255,.08)");
-    if (panel === null) return;
-
-    g.style.setProperty("--fp-bg", bg);
-    g.style.setProperty("--fp-accent", accent);
-    g.style.setProperty("--fp-accent-text", accentText);
-    g.style.setProperty("--fp-card-front", cardFront);
-    g.style.setProperty("--fp-panel", panel);
-
-    alert("Custom theme applied");
+  function syncPickerAndText(picker, text, fallback) {
+    picker.value = normalizeHex(text.value || fallback, fallback);
+    text.value = picker.value;
   }
 
-  function adminMenu() {
-    let pin = prompt("Enter admin PIN");
-    if (pin === null) return;
+  function syncColorInputsFromTheme() {
+    const styles = getComputedStyle(app);
 
-    if (pin !== "1111") {
-      alert("Incorrect PIN");
-      return;
-    }
+    const bg = normalizeHex(styles.getPropertyValue("--fp-bg").trim(), "#0F1115");
+    const accent = normalizeHex(styles.getPropertyValue("--fp-accent").trim(), "#FFFFFF");
+    const accentText = normalizeHex(styles.getPropertyValue("--fp-accent-text").trim(), "#111111");
+    const card = normalizeHex(styles.getPropertyValue("--fp-card-front").trim(), "#151821");
 
-    let action = prompt(
-      "1 = Reset leaderboard\n" +
-      "2 = Set win target to 1 match\n" +
-      "3 = Set win target to 2 matches\n" +
-      "4 = Set win target to 3 matches\n" +
-      "5 = Set win target to 4 matches\n" +
-      "6 = Set win target to all matches\n" +
-      "7 = Toggle idle photo preview\n" +
-      "8 = Toggle start photo preview\n" +
-      "9 = Set countdown seconds\n" +
-      "10 = Set round timer seconds\n" +
-      "11 = Theme: Dark Default\n" +
-      "12 = Theme: BoothKit Purple\n" +
-      "13 = Theme: Gold Luxe\n" +
-      "14 = Custom colors"
-    );
+    el.bgPicker.value = bg;
+    el.bgText.value = bg;
 
-    if (action === "1") {
-      if (confirm("Reset leaderboard?")) {
-        clearLeaderboard();
-        alert("Leaderboard reset");
-      }
-    } else if (action === "2") {
-      winTarget = 1;
-      alert("Win target set to " + getWinTargetLabel());
-    } else if (action === "3") {
-      winTarget = 2;
-      alert("Win target set to " + getWinTargetLabel());
-    } else if (action === "4") {
-      winTarget = 3;
-      alert("Win target set to " + getWinTargetLabel());
-    } else if (action === "5") {
-      winTarget = 4;
-      alert("Win target set to " + getWinTargetLabel());
-    } else if (action === "6") {
-      winTarget = "all";
-      alert("Win target set to " + getWinTargetLabel());
-    } else if (action === "7") {
-      idlePreview = !idlePreview;
-      if (deck.length) renderBoard(idlePreview);
-      alert("Idle preview " + (idlePreview ? "ON" : "OFF"));
-    } else if (action === "8") {
-      startPreview = !startPreview;
-      alert("Start preview " + (startPreview ? "ON" : "OFF"));
-    } else if (action === "9") {
-      let v = prompt("Enter countdown seconds", String(startCountdown));
-      if (v !== null) {
-        v = parseInt(v, 10);
-        if (!isNaN(v) && v >= 0 && v <= 10) {
-          startCountdown = v;
-          cd.textContent = startCountdown;
-          alert("Countdown set to " + startCountdown + " seconds");
-        } else {
-          alert("Invalid countdown");
-        }
-      }
-    } else if (action === "10") {
-      let v = prompt("Enter round timer seconds", String(roundTime));
-      if (v !== null) {
-        v = parseInt(v, 10);
-        if (!isNaN(v) && v >= 5 && v <= 120) {
-          roundTime = v;
-          tE.textContent = roundTime;
-          alert("Round timer set to " + roundTime + " seconds");
-        } else {
-          alert("Invalid round timer");
-        }
-      }
-    } else if (action === "11") {
-      applyThemePreset("1");
-    } else if (action === "12") {
-      applyThemePreset("2");
-    } else if (action === "13") {
-      applyThemePreset("3");
-    } else if (action === "14") {
-      setCustomTheme();
-    }
+    el.accentPicker.value = accent;
+    el.accentText.value = accent;
+
+    el.accentTextPicker.value = accentText;
+    el.accentTextText.value = accentText;
+
+    el.cardPicker.value = card;
+    el.cardText.value = card;
+
+    const panelFallback = "#1C1F27";
+    el.panelPicker.value = panelFallback;
+    el.panelText.value = panelFallback;
   }
 
-  async function pk() {
-    let h = await fetch(location.href + "?t=" + Date.now(), {
-      cache: "no-store"
-    }).then(function (r) {
-      return r.text();
+  function updateSettingsUI() {
+    el.winTargets.forEach(function (btn) {
+      btn.classList.toggle(
+        "active",
+        String(state.winTarget) === btn.getAttribute("data-win")
+      );
     });
 
-    let d = new DOMParser().parseFromString(h, "text/html");
-    let s = [
+    el.countdownInput.value = state.startCountdown;
+    el.roundTimerInput.value = state.roundTime;
+    el.idlePreviewInput.checked = state.idlePreview;
+    el.startPreviewInput.checked = state.startPreview;
+    syncColorInputsFromTheme();
+  }
+
+  function openAdmin() {
+    el.adminModal.classList.remove("hidden");
+    if (state.adminUnlocked) {
+      el.adminLock.classList.add("hidden");
+      el.adminUI.classList.remove("hidden");
+      updateSettingsUI();
+    } else {
+      el.adminLock.classList.remove("hidden");
+      el.adminUI.classList.add("hidden");
+      el.adminPin.value = "";
+      setTimeout(function () {
+        el.adminPin.focus();
+      }, 10);
+    }
+  }
+
+  function closeAdmin() {
+    el.adminModal.classList.add("hidden");
+  }
+
+  function unlockAdmin() {
+    if (el.adminPin.value === state.adminPin) {
+      state.adminUnlocked = true;
+      el.adminLock.classList.add("hidden");
+      el.adminUI.classList.remove("hidden");
+      updateSettingsUI();
+    } else {
+      el.adminPin.value = "";
+      el.adminPin.placeholder = "Incorrect PIN";
+    }
+  }
+
+  async function buildDeck() {
+    const html = await fetch(location.href + "?t=" + Date.now(), { cache: "no-store" })
+      .then(function (response) { return response.text(); });
+
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const urls = [
       ...new Set(
-        [...d.querySelectorAll("#gallery .grid-item img")].map(function (x) {
-          return x.src;
+        [...doc.querySelectorAll("#gallery .grid-item img")].map(function (img) {
+          return img.src;
         })
       )
     ];
 
-    sh(s);
-
-    let u = s.slice(0, 6);
-    return sh(u.concat(u));
+    shuffle(urls);
+    const chosen = urls.slice(0, 6);
+    return shuffle(chosen.concat(chosen));
   }
 
-  function timer() {
-    t = roundTime;
-    tE.textContent = t;
+  function setTimerDisplay(value) {
+    el.timer.textContent = String(value);
+  }
 
-    clearInterval(tm);
+  function startRoundTimer() {
+    let remaining = state.roundTime;
+    setTimerDisplay(remaining);
+    clearInterval(state.roundTimerId);
 
-    tm = setInterval(function () {
-      t--;
-      tE.textContent = t;
+    state.roundTimerId = setInterval(function () {
+      remaining -= 1;
+      setTimerDisplay(remaining);
 
-      if (t <= 0) lose();
+      if (remaining <= 0) {
+        loseRound();
+      }
     }, 1000);
   }
 
-  function upd() {
-    nm.textContent = pn || "ENTER NAME";
-    pl.textContent = pn ? "Player: " + pn : "";
-    s.disabled = pn.length < 2;
+  function updateNameUI() {
+    el.name.textContent = state.playerName || "ENTER NAME";
+    el.player.textContent = state.playerName ? "Player: " + state.playerName : "";
+    el.start.disabled = state.playerName.length < 2;
   }
 
-  function key(v) {
-    if (v === "←") {
-      pn = pn.slice(0, -1);
-    } else if (v === "CLEAR") {
-      pn = "";
-    } else if (v === "SPACE") {
-      if (pn.length < 12 && pn.length && pn[pn.length - 1] !== " ") {
-        pn += " ";
+  function pressKey(value) {
+    if (value === "←") {
+      state.playerName = state.playerName.slice(0, -1);
+    } else if (value === "CLEAR") {
+      state.playerName = "";
+    } else if (value === "SPACE") {
+      if (
+        state.playerName.length < 12 &&
+        state.playerName.length &&
+        state.playerName[state.playerName.length - 1] !== " "
+      ) {
+        state.playerName += " ";
       }
-    } else if (pn.length < 12) {
-      pn += v;
+    } else if (state.playerName.length < 12) {
+      state.playerName += value;
     }
 
-    upd();
+    updateNameUI();
   }
 
-  function mk() {
-    let k = [
+  function buildKeyboard() {
+    const keys = [
       "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P",
       "A", "S", "D", "F", "G", "H", "J", "K", "L", "←",
       "Z", "X", "C", "V", "B", "N", "M", "SPACE", "CLEAR"
     ];
 
-    ky.innerHTML = "";
+    el.keys.innerHTML = "";
 
-    k.forEach(function (v) {
-      let d = document.createElement("div");
-      d.className = "fp-key" + (v === "SPACE" || v === "CLEAR" ? " wide" : "");
-      d.textContent = v === "←" ? "⌫" : v;
-      d.onclick = function () {
-        key(v);
+    keys.forEach(function (key) {
+      const button = document.createElement("div");
+      button.className = "fp-key" + ((key === "SPACE" || key === "CLEAR") ? " wide" : "");
+      button.textContent = key === "←" ? "⌫" : key;
+      button.onclick = function () {
+        pressKey(key);
       };
-      ky.appendChild(d);
+      el.keys.appendChild(button);
     });
   }
 
   function shouldWinNow() {
-    if (winTarget === "all") {
-      return matchedPairs >= deck.length / 2;
-    }
-    return matchedPairs >= winTarget;
+    if (state.winTarget === "all") return state.matchedPairs >= state.deck.length / 2;
+    return state.matchedPairs >= state.winTarget;
   }
 
   function renderBoard(showAll) {
-    b.innerHTML = "";
+    el.board.innerHTML = "";
 
-    deck.forEach(function (src) {
-      let d = document.createElement("div");
-
-      d.className = "fp-card" + (showAll ? " show" : "");
-      d.dataset.k = src;
-      d.innerHTML =
+    state.deck.forEach(function (src) {
+      const card = document.createElement("div");
+      card.className = "fp-card" + (showAll ? " show" : "");
+      card.dataset.k = src;
+      card.innerHTML =
         '<div class="fp-inner">' +
           '<div class="fp-face fp-front"><span>Tap</span></div>' +
           '<div class="fp-face fp-back"><img src="' + src + '"></div>' +
         '</div>';
 
-      b.appendChild(d);
+      el.board.appendChild(card);
 
-      d.onclick = function () {
-        if (!gameActive) return;
-        if (!c.classList.contains("hidden")) return;
-        if (l || d.classList.contains("matched") || d === f) return;
+      card.onclick = function () {
+        if (!state.gameActive) return;
+        if (!el.center.classList.contains("hidden")) return;
+        if (state.lockBoard || card.classList.contains("matched") || card === state.firstCard) return;
 
-        d.classList.add("show");
+        card.classList.add("show");
 
-        if (!f) {
-          f = d;
+        if (!state.firstCard) {
+          state.firstCard = card;
           return;
         }
 
-        l = 1;
+        state.lockBoard = true;
 
-        if (f.dataset.k === d.dataset.k) {
-          f.classList.add("matched");
-          d.classList.add("matched");
-          f = null;
-          matchedPairs++;
+        if (state.firstCard.dataset.k === card.dataset.k) {
+          state.firstCard.classList.add("matched");
+          card.classList.add("matched");
+          state.firstCard = null;
+          state.matchedPairs += 1;
 
           if (shouldWinNow()) {
-            setTimeout(win, 550);
+            setTimeout(winRound, 550);
           } else {
-            l = 0;
+            state.lockBoard = false;
           }
         } else {
-          let a = f;
-          let bb = d;
-
+          const a = state.firstCard;
+          const b = card;
           setTimeout(function () {
             a.classList.remove("show");
-            bb.classList.remove("show");
-            f = null;
-            l = 0;
+            b.classList.remove("show");
+            state.firstCard = null;
+            state.lockBoard = false;
           }, 700);
         }
       };
@@ -435,143 +580,223 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function showNameEntry() {
-    clearTimeout(autoBack);
-    hd.textContent = "Find the Match";
-    cp.textContent = "Enter your name, then tap start.";
-    c.classList.remove("hidden");
-    ky.style.display = "";
-    nm.style.display = "";
-    s.classList.remove("hidden");
-    r.classList.add("hidden");
-    rl();
-    mk();
-    upd();
+    clearTimeout(state.autoBackTimer);
+    el.head.textContent = "Find the Match";
+    el.copy.textContent = "Enter your name, then tap start.";
+    el.center.classList.remove("hidden");
+    el.keys.style.display = "";
+    el.name.style.display = "";
+    el.start.classList.remove("hidden");
+    el.replay.classList.add("hidden");
+    renderLeaderboard();
+    buildKeyboard();
+    updateNameUI();
   }
 
   function showResult(title, text) {
-    clearTimeout(autoBack);
-    hd.textContent = title;
-    cp.textContent = text;
-    c.classList.remove("hidden");
-    ky.style.display = "none";
-    nm.style.display = "none";
-    s.classList.add("hidden");
-    r.classList.remove("hidden");
-    rl();
+    clearTimeout(state.autoBackTimer);
+    el.head.textContent = title;
+    el.copy.textContent = text;
+    el.center.classList.remove("hidden");
+    el.keys.style.display = "none";
+    el.name.style.display = "none";
+    el.start.classList.add("hidden");
+    el.replay.classList.remove("hidden");
+    renderLeaderboard();
 
-    autoBack = setTimeout(function () {
-      idle();
+    state.autoBackTimer = setTimeout(function () {
+      goIdle();
     }, 5000);
   }
 
-  function win() {
-    clearInterval(tm);
-    gameActive = false;
+  function winRound() {
+    clearInterval(state.roundTimerId);
+    state.gameActive = false;
 
-    let e = (Date.now() - rs) / 1000;
+    const elapsed = (Date.now() - state.roundStartedAt) / 1000;
+    if (state.playerName) saveScore(state.playerName, elapsed);
 
-    if (pn) ss(pn, e);
-
-    pn = "";
-    upd();
+    state.playerName = "";
+    updateNameUI();
     showResult("You Found a Match!", "Target: " + getWinTargetLabel() + ". Starting over shortly...");
   }
 
-  function lose() {
-    clearInterval(tm);
-    gameActive = false;
-    pn = "";
-    upd();
+  function loseRound() {
+    clearInterval(state.roundTimerId);
+    state.gameActive = false;
+    state.playerName = "";
+    updateNameUI();
     showResult("Time's Up!", "Starting over shortly...");
   }
 
-  function idle() {
-    clearTimeout(autoBack);
-    clearInterval(tm);
+  function goIdle() {
+    clearTimeout(state.autoBackTimer);
+    clearInterval(state.roundTimerId);
 
-    tE.textContent = String(roundTime);
-    pl.textContent = "";
-    pn = "";
-    f = null;
-    l = 0;
-    matchedPairs = 0;
-    gameActive = false;
+    setTimerDisplay(state.roundTime);
+    el.player.textContent = "";
+    state.playerName = "";
+    state.firstCard = null;
+    state.lockBoard = false;
+    state.matchedPairs = 0;
+    state.gameActive = false;
 
-    c.classList.add("hidden");
-    cd.classList.add("hidden");
+    el.center.classList.add("hidden");
+    el.countdown.classList.add("hidden");
 
-    upd();
+    updateNameUI();
 
-    if (deck.length) {
-      renderBoard(idlePreview);
+    if (state.deck.length) {
+      renderBoard(state.idlePreview);
     }
 
-    p.classList.remove("hidden");
+    el.play.classList.remove("hidden");
   }
 
-  function count(d) {
-    let n = startCountdown;
+  function runCountdown(done) {
+    let value = state.startCountdown;
 
-    if (n <= 0) {
-      cd.classList.add("hidden");
-      d();
+    if (value <= 0) {
+      el.countdown.classList.add("hidden");
+      done();
       return;
     }
 
-    cd.textContent = n;
-    cd.classList.remove("hidden");
+    el.countdown.textContent = value;
+    el.countdown.classList.remove("hidden");
 
-    let iv = setInterval(function () {
-      n--;
-
-      if (n <= 0) {
-        clearInterval(iv);
-        cd.classList.add("hidden");
-        d();
+    const id = setInterval(function () {
+      value -= 1;
+      if (value <= 0) {
+        clearInterval(id);
+        el.countdown.classList.add("hidden");
+        done();
       } else {
-        cd.textContent = n;
+        el.countdown.textContent = value;
       }
     }, 1000);
   }
 
   async function prepareDeck() {
-    deck = await pk();
-    renderBoard(idlePreview);
+    state.deck = await buildDeck();
+    renderBoard(state.idlePreview);
   }
 
   async function startGame() {
-    if (pn.length < 2) return;
+    if (state.playerName.length < 2) return;
 
-    deck = await pk();
-    matchedPairs = 0;
-    gameActive = false;
-    c.classList.add("hidden");
-    p.classList.add("hidden");
-    f = null;
-    l = 1;
+    state.deck = await buildDeck();
+    state.matchedPairs = 0;
+    state.gameActive = false;
+    el.center.classList.add("hidden");
+    el.play.classList.add("hidden");
+    state.firstCard = null;
+    state.lockBoard = true;
 
-    renderBoard(startPreview);
+    renderBoard(state.startPreview);
 
-    count(function () {
-      [...b.children].forEach(function (x) {
-        x.classList.remove("show");
+    runCountdown(function () {
+      [...el.board.children].forEach(function (card) {
+        card.classList.remove("show");
       });
 
-      rs = Date.now();
-      l = 0;
-      gameActive = true;
-      timer();
+      state.roundStartedAt = Date.now();
+      state.lockBoard = false;
+      state.gameActive = true;
+      startRoundTimer();
     });
   }
 
-  p.onclick = showNameEntry;
-  s.onclick = startGame;
-  r.onclick = idle;
-  ad.onclick = adminMenu;
+  function bindColorPair(picker, text, fallback) {
+    picker.addEventListener("input", function () {
+      text.value = picker.value.toUpperCase();
+    });
 
-  applyThemePreset("1");
+    text.addEventListener("input", function () {
+      const normalized = normalizeHex(text.value, fallback);
+      if (isValidHex(text.value.trim())) {
+        picker.value = normalized;
+        text.value = normalized;
+      }
+    });
+  }
 
+  el.play.onclick = showNameEntry;
+  el.start.onclick = startGame;
+  el.replay.onclick = goIdle;
+
+  el.adminButton.onclick = openAdmin;
+  el.adminBackdrop.onclick = closeAdmin;
+  el.adminCloseLock.onclick = closeAdmin;
+  el.adminClose.onclick = closeAdmin;
+  el.adminUnlock.onclick = unlockAdmin;
+  el.adminPin.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") unlockAdmin();
+  });
+
+  el.winTargets.forEach(function (button) {
+    button.onclick = function () {
+      const value = button.getAttribute("data-win");
+      state.winTarget = value === "all" ? "all" : parseInt(value, 10);
+      updateSettingsUI();
+    };
+  });
+
+  el.countdownInput.addEventListener("input", function () {
+    const value = parseInt(el.countdownInput.value, 10);
+    if (!isNaN(value)) state.startCountdown = Math.max(0, Math.min(10, value));
+  });
+
+  el.roundTimerInput.addEventListener("input", function () {
+    const value = parseInt(el.roundTimerInput.value, 10);
+    if (!isNaN(value)) {
+      state.roundTime = Math.max(5, Math.min(120, value));
+      if (!state.gameActive) setTimerDisplay(state.roundTime);
+    }
+  });
+
+  el.idlePreviewInput.addEventListener("change", function () {
+    state.idlePreview = el.idlePreviewInput.checked;
+    if (!state.gameActive && state.deck.length) renderBoard(state.idlePreview);
+  });
+
+  el.startPreviewInput.addEventListener("change", function () {
+    state.startPreview = el.startPreviewInput.checked;
+  });
+
+  el.presetButtons.forEach(function (button) {
+    button.onclick = function () {
+      applyThemePreset(button.getAttribute("data-preset"));
+    };
+  });
+
+  bindColorPair(el.bgPicker, el.bgText, "#0F1115");
+  bindColorPair(el.accentPicker, el.accentText, "#FFFFFF");
+  bindColorPair(el.accentTextPicker, el.accentTextText, "#111111");
+  bindColorPair(el.cardPicker, el.cardText, "#151821");
+  bindColorPair(el.panelPicker, el.panelText, "#1C1F27");
+
+  el.applyTheme.onclick = function () {
+    applyThemeColors({
+      bg: el.bgText.value,
+      accent: el.accentText.value,
+      accentText: el.accentTextText.value,
+      card: el.cardText.value,
+      panel: el.panelText.value
+    });
+  };
+
+  el.resetTheme.onclick = function () {
+    applyThemePreset("dark");
+  };
+
+  el.resetLeaderboard.onclick = function () {
+    clearLeaderboard();
+  };
+
+  applyThemePreset("dark");
   prepareDeck().then(function () {
-    idle();
+    setTimerDisplay(state.roundTime);
+    goIdle();
   });
 });
