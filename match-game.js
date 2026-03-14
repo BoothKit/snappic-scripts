@@ -7,6 +7,12 @@ document.addEventListener("DOMContentLoaded", function () {
   let g = document.createElement("div");
   let pn = "";
   let autoBack = 0;
+  let deck = [];
+  let matchedPairs = 0;
+
+  let idlePreview = true;
+  let startPreview = true;
+  let winTarget = 1; // 1,2,3,4 or "all"
 
   g.id = "fp-game";
   g.innerHTML =
@@ -58,7 +64,6 @@ document.addEventListener("DOMContentLoaded", function () {
   let f = null;
   let l = 0;
   let rs = 0;
-  let deck = [];
 
   function sh(a) {
     for (let i = a.length - 1; i > 0; i--) {
@@ -110,6 +115,10 @@ document.addEventListener("DOMContentLoaded", function () {
     rl();
   }
 
+  function getWinTargetLabel() {
+    return winTarget === "all" ? "All Matches" : winTarget + " Match" + (winTarget > 1 ? "es" : "");
+  }
+
   function adminMenu() {
     let pin = prompt("Enter admin PIN");
     if (pin === null) return;
@@ -119,16 +128,44 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    let action = prompt("Enter 1 to reset leaderboard");
-    if (action === null) return;
+    let action = prompt(
+      "1 = Reset leaderboard\n" +
+      "2 = Set win target to 1 match\n" +
+      "3 = Set win target to 2 matches\n" +
+      "4 = Set win target to 3 matches\n" +
+      "5 = Set win target to 4 matches\n" +
+      "6 = Set win target to all matches\n" +
+      "7 = Toggle idle photo preview\n" +
+      "8 = Toggle start photo preview"
+    );
 
     if (action === "1") {
       if (confirm("Reset leaderboard?")) {
         clearLeaderboard();
         alert("Leaderboard reset");
       }
-    } else {
-      alert("No action selected");
+    } else if (action === "2") {
+      winTarget = 1;
+      alert("Win target set to " + getWinTargetLabel());
+    } else if (action === "3") {
+      winTarget = 2;
+      alert("Win target set to " + getWinTargetLabel());
+    } else if (action === "4") {
+      winTarget = 3;
+      alert("Win target set to " + getWinTargetLabel());
+    } else if (action === "5") {
+      winTarget = 4;
+      alert("Win target set to " + getWinTargetLabel());
+    } else if (action === "6") {
+      winTarget = "all";
+      alert("Win target set to " + getWinTargetLabel());
+    } else if (action === "7") {
+      idlePreview = !idlePreview;
+      if (deck.length) renderBoard(idlePreview);
+      alert("Idle preview " + (idlePreview ? "ON" : "OFF"));
+    } else if (action === "8") {
+      startPreview = !startPreview;
+      alert("Start preview " + (startPreview ? "ON" : "OFF"));
     }
   }
 
@@ -210,6 +247,13 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  function shouldWinNow() {
+    if (winTarget === "all") {
+      return matchedPairs >= deck.length / 2;
+    }
+    return matchedPairs >= winTarget;
+  }
+
   function renderBoard(showAll) {
     b.innerHTML = "";
 
@@ -227,7 +271,7 @@ document.addEventListener("DOMContentLoaded", function () {
       b.appendChild(d);
 
       d.onclick = function () {
-        if (c.classList.contains("hidden") === false) return;
+        if (!c.classList.contains("hidden")) return;
         if (l || d.classList.contains("matched") || d === f) return;
 
         d.classList.add("show");
@@ -243,8 +287,9 @@ document.addEventListener("DOMContentLoaded", function () {
           f.classList.add("matched");
           d.classList.add("matched");
           f = null;
+          matchedPairs++;
 
-          if ([...b.querySelectorAll(".fp-card.matched")].length === deck.length) {
+          if (shouldWinNow()) {
             setTimeout(win, 550);
           } else {
             l = 0;
@@ -303,7 +348,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     pn = "";
     upd();
-    showResult("You Found Every Match!", "Starting over shortly...");
+    showResult("You Found a Match!", "Target: " + getWinTargetLabel() + ". Starting over shortly...");
   }
 
   function lose() {
@@ -322,6 +367,7 @@ document.addEventListener("DOMContentLoaded", function () {
     pn = "";
     f = null;
     l = 0;
+    matchedPairs = 0;
 
     c.classList.add("hidden");
     cd.classList.add("hidden");
@@ -329,7 +375,7 @@ document.addEventListener("DOMContentLoaded", function () {
     upd();
 
     if (deck.length) {
-      renderBoard(false);
+      renderBoard(idlePreview);
     }
 
     p.classList.remove("hidden");
@@ -356,18 +402,20 @@ document.addEventListener("DOMContentLoaded", function () {
 
   async function prepareDeck() {
     deck = await pk();
-    renderBoard(false);
+    renderBoard(idlePreview);
   }
 
-  function startGame() {
+  async function startGame() {
     if (pn.length < 2) return;
 
+    deck = await pk();
+    matchedPairs = 0;
     c.classList.add("hidden");
     p.classList.add("hidden");
     f = null;
     l = 1;
 
-    renderBoard(true);
+    renderBoard(startPreview);
 
     count(function () {
       [...b.children].forEach(function (x) {
