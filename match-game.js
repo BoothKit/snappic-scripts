@@ -2,10 +2,11 @@ document.addEventListener("DOMContentLoaded", function () {
   let h = document.querySelector("#content");
   let i = [...document.querySelectorAll("#gallery .grid-item img")];
 
-  if (!h || i.length < 4) return;
+  if (!h || i.length < 6) return;
 
   let g = document.createElement("div");
   let pn = "";
+  let autoBack = 0;
 
   g.id = "fp-game";
   g.innerHTML =
@@ -21,14 +22,15 @@ document.addEventListener("DOMContentLoaded", function () {
         '</div>' +
       '</div>' +
       '<div id="fp-board"></div>' +
-      '<div id="fp-center">' +
+      '<button id="fp-play" type="button">Play</button>' +
+      '<div id="fp-center" class="hidden">' +
         '<div id="fp-card">' +
           '<h2 id="fp-head">Find the Match</h2>' +
           '<p id="fp-copy">Enter your name, then tap start.</p>' +
           '<div id="fp-name">ENTER NAME</div>' +
           '<div id="fp-keys"></div>' +
           '<button id="fp-start" disabled>Tap to Start</button>' +
-          '<button id="fp-replay" class="hidden">Tap to Play Again</button>' +
+          '<button id="fp-replay" class="hidden">Start Over</button>' +
           '<div id="fp-leaderboard"></div>' +
         '</div>' +
       '</div>' +
@@ -44,6 +46,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let cp = g.querySelector("#fp-copy");
   let s = g.querySelector("#fp-start");
   let r = g.querySelector("#fp-replay");
+  let p = g.querySelector("#fp-play");
   let cd = g.querySelector("#fp-countdown");
   let nm = g.querySelector("#fp-name");
   let ky = g.querySelector("#fp-keys");
@@ -55,6 +58,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let f = null;
   let l = 0;
   let rs = 0;
+  let deck = [];
 
   function sh(a) {
     for (let i = a.length - 1; i > 0; i--) {
@@ -146,7 +150,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     sh(s);
 
-    let u = s.slice(0, 4);
+    let u = s.slice(0, 6);
     return sh(u.concat(u));
   }
 
@@ -162,33 +166,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
       if (t <= 0) lose();
     }, 1000);
-  }
-
-  function show(t, x) {
-    hd.textContent = t;
-    cp.textContent = x;
-    c.classList.remove("hidden");
-    s.classList.add("hidden");
-    r.classList.remove("hidden");
-  }
-
-  function win() {
-    clearInterval(tm);
-
-    let e = (Date.now() - rs) / 1000;
-
-    if (pn) ss(pn, e);
-
-    show("You Found a Match!", "Tap to play again.");
-    pn = "";
-    upd();
-  }
-
-  function lose() {
-    clearInterval(tm);
-    show("Time's Up!", "Tap to play again.");
-    pn = "";
-    upd();
   }
 
   function upd() {
@@ -233,23 +210,129 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  function idle() {
+  function renderBoard(showAll) {
     b.innerHTML = "";
-    tE.textContent = "20";
+
+    deck.forEach(function (src) {
+      let d = document.createElement("div");
+
+      d.className = "fp-card" + (showAll ? " show" : "");
+      d.dataset.k = src;
+      d.innerHTML =
+        '<div class="fp-inner">' +
+          '<div class="fp-face fp-front"><span>Tap</span></div>' +
+          '<div class="fp-face fp-back"><img src="' + src + '"></div>' +
+        '</div>';
+
+      b.appendChild(d);
+
+      d.onclick = function () {
+        if (c.classList.contains("hidden") === false) return;
+        if (l || d.classList.contains("matched") || d === f) return;
+
+        d.classList.add("show");
+
+        if (!f) {
+          f = d;
+          return;
+        }
+
+        l = 1;
+
+        if (f.dataset.k === d.dataset.k) {
+          f.classList.add("matched");
+          d.classList.add("matched");
+          f = null;
+
+          if ([...b.querySelectorAll(".fp-card.matched")].length === deck.length) {
+            setTimeout(win, 550);
+          } else {
+            l = 0;
+          }
+        } else {
+          let a = f;
+          let bb = d;
+
+          setTimeout(function () {
+            a.classList.remove("show");
+            bb.classList.remove("show");
+            f = null;
+            l = 0;
+          }, 700);
+        }
+      };
+    });
+  }
+
+  function showNameEntry() {
+    clearTimeout(autoBack);
     hd.textContent = "Find the Match";
     cp.textContent = "Enter your name, then tap start.";
     c.classList.remove("hidden");
-    cd.classList.add("hidden");
+    ky.style.display = "";
+    nm.style.display = "";
     s.classList.remove("hidden");
     r.classList.add("hidden");
+    rl();
+    mk();
+    upd();
+  }
+
+  function showResult(title, text) {
+    clearTimeout(autoBack);
+    hd.textContent = title;
+    cp.textContent = text;
+    c.classList.remove("hidden");
+    ky.style.display = "none";
+    nm.style.display = "none";
+    s.classList.add("hidden");
+    r.classList.remove("hidden");
+    rl();
+
+    autoBack = setTimeout(function () {
+      idle();
+    }, 5000);
+  }
+
+  function win() {
+    clearInterval(tm);
+
+    let e = (Date.now() - rs) / 1000;
+
+    if (pn) ss(pn, e);
+
+    pn = "";
+    upd();
+    showResult("You Found Every Match!", "Starting over shortly...");
+  }
+
+  function lose() {
+    clearInterval(tm);
+    pn = "";
+    upd();
+    showResult("Time's Up!", "Starting over shortly...");
+  }
+
+  function idle() {
+    clearTimeout(autoBack);
+    clearInterval(tm);
+
+    tE.textContent = "20";
+    pl.textContent = "";
+    pn = "";
     f = null;
     l = 0;
 
-    clearInterval(tm);
+    c.classList.add("hidden");
+    cd.classList.add("hidden");
 
-    mk();
     upd();
-    rl();
+
+    if (deck.length) {
+      renderBoard(false);
+    }
+
+    p.classList.remove("hidden");
   }
 
   function count(d) {
@@ -271,56 +354,20 @@ document.addEventListener("DOMContentLoaded", function () {
     }, 1000);
   }
 
-  async function build() {
+  async function prepareDeck() {
+    deck = await pk();
+    renderBoard(false);
+  }
+
+  function startGame() {
     if (pn.length < 2) return;
 
-    b.innerHTML = "";
+    c.classList.add("hidden");
+    p.classList.add("hidden");
     f = null;
     l = 1;
-    c.classList.add("hidden");
 
-    (await pk()).forEach(function (src) {
-      let d = document.createElement("div");
-
-      d.className = "fp-card show";
-      d.dataset.k = src;
-      d.innerHTML =
-        '<div class="fp-inner">' +
-          '<div class="fp-face fp-front"><span>Tap</span></div>' +
-          '<div class="fp-face fp-back"><img src="' + src + '"></div>' +
-        '</div>';
-
-      b.appendChild(d);
-
-      d.onclick = function () {
-        if (l || d.classList.contains("matched") || d === f) return;
-
-        d.classList.add("show");
-
-        if (!f) {
-          f = d;
-          return;
-        }
-
-        l = 1;
-
-        if (f.dataset.k === d.dataset.k) {
-          f.classList.add("matched");
-          d.classList.add("matched");
-          setTimeout(win, 550);
-        } else {
-          let a = f;
-          let b = d;
-
-          setTimeout(function () {
-            a.classList.remove("show");
-            b.classList.remove("show");
-            f = null;
-            l = 0;
-          }, 700);
-        }
-      };
-    });
+    renderBoard(true);
 
     count(function () {
       [...b.children].forEach(function (x) {
@@ -333,9 +380,12 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  s.onclick = build;
+  p.onclick = showNameEntry;
+  s.onclick = startGame;
   r.onclick = idle;
   ad.onclick = adminMenu;
 
-  idle();
+  prepareDeck().then(function () {
+    idle();
+  });
 });
