@@ -989,10 +989,16 @@ document.addEventListener("contextmenu", function(e){
   }
 
   function applyBoardOffset() {
-    const offset = Math.max(-500, Math.min(500, state.boardOffsetY || 0));
-    state.boardOffsetY = offset;
-    app.style.setProperty("--fp-board-offset-y", offset + "px");
+  const offset = Math.max(-500, Math.min(500, state.boardOffsetY || 0));
+  state.boardOffsetY = offset;
+
+  app.style.setProperty("--fp-board-offset-y", offset + "px");
+
+  if (el.boardShell) {
+    el.boardShell.style.transform = "";
+    el.boardShell.style.marginTop = offset + "px";
   }
+}
 
   function applyBoardAreaSizing() {
   state.boardWidthPercent = Math.max(60, Math.min(100, state.boardWidthPercent || 100));
@@ -1004,12 +1010,17 @@ document.addEventListener("contextmenu", function(e){
   app.style.setProperty("--fp-board-min-height", state.boardMinHeight + "px");
   app.style.setProperty("--fp-board-gap", state.boardGap + "px");
 
-  if (state.boardMinHeight > 0) {
-    el.boardShell.style.height = state.boardMinHeight + "px";
-    el.board.style.height = "100%";
-  } else {
-    el.boardShell.style.height = "";
-    el.board.style.height = "";
+  if (el.boardShell) {
+    el.boardShell.style.width = state.boardWidthPercent + "%";
+    el.boardShell.style.maxWidth = "none";
+    el.boardShell.style.minHeight = state.boardMinHeight + "px";
+    el.boardShell.style.height = state.boardMinHeight > 0 ? state.boardMinHeight + "px" : "";
+  }
+
+  if (el.board) {
+    el.board.style.gap = state.boardGap + "px";
+    el.board.style.width = "100%";
+    el.board.style.height = state.boardMinHeight > 0 ? "100%" : "";
   }
 }
 
@@ -1622,6 +1633,8 @@ document.addEventListener("contextmenu", function(e){
   const useFixedHeight = state.boardMinHeight > 0;
 
   el.board.style.display = "grid";
+  el.board.style.width = "100%";
+  el.board.style.gap = state.boardGap + "px";
   el.board.style.gridTemplateColumns = "repeat(" + grid.cols + ", minmax(0, 1fr))";
   el.board.style.gridAutoFlow = "row";
 
@@ -1638,6 +1651,13 @@ document.addEventListener("contextmenu", function(e){
     el.board.style.gridAutoRows = "auto";
     el.board.style.alignItems = "start";
     el.board.style.alignContent = "start";
+  }
+
+  if (el.boardShell) {
+    el.boardShell.style.width = state.boardWidthPercent + "%";
+    el.boardShell.style.maxWidth = "none";
+    el.boardShell.style.minHeight = state.boardMinHeight + "px";
+    el.boardShell.style.height = state.boardMinHeight > 0 ? state.boardMinHeight + "px" : "";
   }
 
   el.board.setAttribute("data-card-count", String(count));
