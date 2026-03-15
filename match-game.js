@@ -1,17 +1,6 @@
 document.addEventListener("DOMContentLoaded", function () {
   document.addEventListener("contextmenu", function(e){ e.preventDefault(); });
 
-  // ── Block long-press / touch-hold saving & context menus everywhere on the game ──
-  document.addEventListener("touchstart", function(e){
-    if (e.target.closest && e.target.closest("#fp-admin-modal")) return;
-    e.preventDefault();
-  }, { passive: false });
-
-  document.addEventListener("touchend", function(e){
-    if (e.target.closest && e.target.closest("#fp-admin-modal")) return;
-    e.preventDefault();
-  }, { passive: false });
-
   const host = document.querySelector("#content");
   const galleryImgs = [...document.querySelectorAll("#gallery .grid-item img")];
   if (!host || galleryImgs.length < 6) return;
