@@ -1,15 +1,19 @@
 document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("contextmenu", function(e){
+  e.preventDefault();
+});  
   const host = document.querySelector("#content");
   const galleryImgs = [...document.querySelectorAll("#gallery .grid-item img")];
   if (!host || galleryImgs.length < 6) return;
 
   const STORAGE_KEYS = {
-    settings: "fp_settings_v10",
-    leaderboard: "fp_lb_v10"
+    settings: "fp_settings_v13",
+    leaderboard: "fp_lb_v13"
   };
 
-  const CARD_COUNTS = [6, 8, 10, 12, 16];
+  const CARD_COUNTS = [6, 8, 10, 12, 16, 20, 30];
   const ROUND_DIFFICULTIES = ["same", "lessTime", "moreCards", "randomReshuffle", "moreMatches"];
+  const COLUMN_OPTIONS = [2, 3, 4, 5, 6];
 
   const DEFAULTS = {
     playerName: "",
@@ -28,6 +32,10 @@ document.addEventListener("DOMContentLoaded", function () {
     roundTime: 20,
     idleRefreshSeconds: 30,
     cardCount: 12,
+    columns: 4,
+    boardWidthPercent: 100,
+    boardMinHeight: 0,
+    boardGap: 16,
     gameActive: false,
     adminUnlocked: false,
     adminPin: "1111",
@@ -292,6 +300,43 @@ document.addEventListener("DOMContentLoaded", function () {
           grid-template-columns:repeat(10,1fr) !important;
         }
 
+        #fp-round-transition{
+          position:fixed !important;
+          inset:0 !important;
+          z-index:85 !important;
+          display:flex !important;
+          align-items:center !important;
+          justify-content:center !important;
+          padding:24px !important;
+          background:rgba(0,0,0,.58) !important;
+          backdrop-filter:blur(8px) !important;
+          -webkit-backdrop-filter:blur(8px) !important;
+          opacity:0;
+          pointer-events:none;
+          transition:opacity .28s ease;
+        }
+
+        #fp-round-transition.hidden{
+          display:none !important;
+        }
+
+        #fp-round-transition.show{
+          opacity:1;
+          pointer-events:auto;
+        }
+
+        #fp-round-transition-card{
+          width:min(92vw,540px) !important;
+          max-width:min(92vw,540px) !important;
+          margin:0 auto !important;
+          background:var(--fp-panel) !important;
+          border:1px solid rgba(255,255,255,.14) !important;
+          border-radius:26px !important;
+          padding:28px 24px !important;
+          text-align:center !important;
+          box-shadow:0 28px 80px rgba(0,0,0,.34) !important;
+        }
+
         .fp-key.bottom-left,
         .fp-key.bottom-right{
           grid-column:span 5 !important;
@@ -412,14 +457,38 @@ document.addEventListener("DOMContentLoaded", function () {
                   '</div>' +
                 '</div>' +
 
+                '<label class="fp-admin-label fp-admin-label-top">Columns</label>' +
+'<div id="fp-column-counts" class="fp-chip-group">' +
+  '<button type="button" class="fp-chip" data-columns="2">2 Columns</button>' +
+  '<button type="button" class="fp-chip" data-columns="3">3 Columns</button>' +
+  '<button type="button" class="fp-chip" data-columns="4">4 Columns</button>' +
+  '<button type="button" class="fp-chip" data-columns="5">5 Columns</button>' +
+  '<button type="button" class="fp-chip" data-columns="6">6 Columns</button>' +
+'</div>' +
+                '<div class="fp-admin-note">Choose how many columns the board uses. More columns makes cards shorter. Fewer columns makes cards taller.</div>' +
+
+                '<label class="fp-admin-label fp-admin-label-top" for="fp-board-width-range">Card Area Width (%)</label>' +
+                '<input id="fp-board-width-range" class="fp-admin-number" type="range" min="60" max="100" step="1">' +
+                '<div id="fp-board-width-value" class="fp-admin-note">100%</div>' +
+
+                '<label class="fp-admin-label fp-admin-label-top" for="fp-board-height-range">Card Area Min Height (px)</label>' +
+                '<input id="fp-board-height-range" class="fp-admin-number" type="range" min="200" max="1400" step="10">' +
+                '<div id="fp-board-height-value" class="fp-admin-note">0px</div>' +
+
+                '<label class="fp-admin-label fp-admin-label-top" for="fp-board-gap-range">Card Gap</label>' +
+                '<input id="fp-board-gap-range" class="fp-admin-number" type="range" min="6" max="30" step="1">' +
+                '<div id="fp-board-gap-value" class="fp-admin-note">16px</div>' +
+
                 '<label class="fp-admin-label fp-admin-label-top">Card Layout</label>' +
-                '<div id="fp-card-counts" class="fp-chip-group">' +
-                  '<button type="button" class="fp-chip" data-card-count="6">6 Cards</button>' +
-                  '<button type="button" class="fp-chip" data-card-count="8">8 Cards</button>' +
-                  '<button type="button" class="fp-chip" data-card-count="10">10 Cards</button>' +
-                  '<button type="button" class="fp-chip" data-card-count="12">12 Cards</button>' +
-                  '<button type="button" class="fp-chip" data-card-count="16">16 Cards</button>' +
-                '</div>' +
+'<div id="fp-card-counts" class="fp-chip-group">' +
+  '<button type="button" class="fp-chip" data-card-count="6">6 Cards</button>' +
+  '<button type="button" class="fp-chip" data-card-count="8">8 Cards</button>' +
+  '<button type="button" class="fp-chip" data-card-count="10">10 Cards</button>' +
+  '<button type="button" class="fp-chip" data-card-count="12">12 Cards</button>' +
+  '<button type="button" class="fp-chip" data-card-count="16">16 Cards</button>' +
+  '<button type="button" class="fp-chip" data-card-count="20">20 Cards</button>' +
+  '<button type="button" class="fp-chip" data-card-count="30">30 Cards</button>' +
+'</div>' +
 
                 '<label class="fp-admin-label fp-admin-label-top">Rounds</label>' +
                 '<div id="fp-round-counts" class="fp-chip-group">' +
@@ -634,6 +703,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     winTargetsWrap: app.querySelector("#fp-win-targets"),
     winTargets: [...app.querySelectorAll("[data-win]")],
+    columnButtons: [...app.querySelectorAll("[data-columns]")],
     cardCountButtons: [...app.querySelectorAll("[data-card-count]")],
     roundButtons: [...app.querySelectorAll("[data-rounds]")],
     difficultyButtons: [...app.querySelectorAll("[data-difficulty]")],
@@ -645,6 +715,13 @@ document.addEventListener("DOMContentLoaded", function () {
     showCursorInput: app.querySelector("#fp-setting-show-cursor"),
     presetButtons: [...app.querySelectorAll(".fp-preset")],
     winTargetOverrideNote: app.querySelector("#fp-win-target-override-note"),
+
+    boardWidthRange: app.querySelector("#fp-board-width-range"),
+    boardWidthValue: app.querySelector("#fp-board-width-value"),
+    boardHeightRange: app.querySelector("#fp-board-height-range"),
+    boardHeightValue: app.querySelector("#fp-board-height-value"),
+    boardGapRange: app.querySelector("#fp-board-gap-range"),
+    boardGapValue: app.querySelector("#fp-board-gap-value"),
 
     bgPicker: app.querySelector("#fp-color-bg-picker"),
     bgText: app.querySelector("#fp-color-bg-text"),
@@ -676,10 +753,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     bgUpload: app.querySelector("#fp-bg-upload"),
     bgStatus: app.querySelector("#fp-bg-status"),
-    removeBg: app.querySelector("#fp-remove-bg"),
 
     fontUpload: app.querySelector("#fp-font-upload"),
     fontStatus: app.querySelector("#fp-font-status"),
+    removeBg: app.querySelector("#fp-remove-bg"),
     removeFont: app.querySelector("#fp-remove-font"),
 
     exportSettings: app.querySelector("#fp-export-settings"),
@@ -729,6 +806,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function isWinTargetOverridden() {
     return state.roundDifficulty === "moreMatches";
+  }
+
+  function getCardAspectRatio() {
+    return "4 / 3";
   }
 
   function setWinTargetDisabledUi(disabled) {
@@ -834,10 +915,11 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function getCurrentLeaderboardCategory() {
+    const columnKey = "columns:" + state.columns;
     if (isSurvivalMode()) {
-      return "survival|" + state.roundDifficulty + "|baseTarget:" + state.winTarget + "|baseCards:" + state.cardCount;
+      return "survival|" + state.roundDifficulty + "|baseTarget:" + state.winTarget + "|baseCards:" + state.cardCount + "|" + columnKey;
     }
-    return "goal|target:" + state.winTarget + "|cards:" + state.cardCount;
+    return "goal|target:" + state.winTarget + "|cards:" + state.cardCount + "|" + columnKey;
   }
 
   function getCurrentLeaderboardHeading() {
@@ -911,6 +993,25 @@ document.addEventListener("DOMContentLoaded", function () {
     state.boardOffsetY = offset;
     app.style.setProperty("--fp-board-offset-y", offset + "px");
   }
+
+  function applyBoardAreaSizing() {
+  state.boardWidthPercent = Math.max(60, Math.min(100, state.boardWidthPercent || 100));
+  state.boardMinHeight = Math.max(0, Math.min(1400, state.boardMinHeight || 0));
+  state.boardGap = Math.max(6, Math.min(30, state.boardGap || 16));
+
+  app.style.setProperty("--fp-board-width", state.boardWidthPercent + "%");
+  app.style.setProperty("--fp-board-max-width", "none");
+  app.style.setProperty("--fp-board-min-height", state.boardMinHeight + "px");
+  app.style.setProperty("--fp-board-gap", state.boardGap + "px");
+
+  if (state.boardMinHeight > 0) {
+    el.boardShell.style.height = state.boardMinHeight + "px";
+    el.board.style.height = "100%";
+  } else {
+    el.boardShell.style.height = "";
+    el.board.style.height = "";
+  }
+}
 
   function getScores() {
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.leaderboard) || "[]");
@@ -1097,6 +1198,10 @@ document.addEventListener("DOMContentLoaded", function () {
         roundTime: state.roundTime,
         idleRefreshSeconds: state.idleRefreshSeconds,
         cardCount: state.cardCount,
+        columns: state.columns,
+        boardWidthPercent: state.boardWidthPercent,
+        boardMinHeight: state.boardMinHeight,
+        boardGap: state.boardGap,
         idlePreview: state.idlePreview,
         startPreview: state.startPreview,
         adminPin: state.adminPin,
@@ -1140,6 +1245,30 @@ document.addEventListener("DOMContentLoaded", function () {
     if (CARD_COUNTS.indexOf(saved.cardCount) > -1) {
       state.cardCount = saved.cardCount;
     }
+    if (COLUMN_OPTIONS.indexOf(saved.columns) > -1) {
+      state.columns = saved.columns;
+    } else {
+      state.columns = DEFAULTS.columns;
+    }
+
+    if (typeof saved.boardWidthPercent === "number") {
+      state.boardWidthPercent = Math.max(60, Math.min(100, saved.boardWidthPercent));
+    } else {
+      state.boardWidthPercent = DEFAULTS.boardWidthPercent;
+    }
+
+    if (typeof saved.boardMinHeight === "number") {
+      state.boardMinHeight = Math.max(0, Math.min(1400, saved.boardMinHeight));
+    } else {
+      state.boardMinHeight = DEFAULTS.boardMinHeight;
+    }
+
+    if (typeof saved.boardGap === "number") {
+      state.boardGap = Math.max(6, Math.min(30, saved.boardGap));
+    } else {
+      state.boardGap = DEFAULTS.boardGap;
+    }
+
     if (typeof saved.idlePreview === "boolean") state.idlePreview = saved.idlePreview;
     if (typeof saved.startPreview === "boolean") state.startPreview = saved.startPreview;
     if (typeof saved.showCursor === "boolean") state.showCursor = saved.showCursor;
@@ -1377,6 +1506,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     setWinTargetDisabledUi(isWinTargetOverridden());
 
+    el.columnButtons.forEach(function (btn) {
+      btn.classList.toggle("active", String(state.columns) === btn.getAttribute("data-columns"));
+    });
+
     el.cardCountButtons.forEach(function (btn) {
       btn.classList.toggle("active", String(state.cardCount) === btn.getAttribute("data-card-count"));
     });
@@ -1400,6 +1533,15 @@ document.addEventListener("DOMContentLoaded", function () {
     if (el.headerLogoOffsetInput) el.headerLogoOffsetInput.value = state.headerLogoOffsetY;
     if (el.hudOffsetInput) el.hudOffsetInput.value = state.hudOffsetY;
     if (el.boardOffsetInput) el.boardOffsetInput.value = state.boardOffsetY;
+
+    if (el.boardWidthRange) el.boardWidthRange.value = state.boardWidthPercent;
+    if (el.boardWidthValue) el.boardWidthValue.textContent = state.boardWidthPercent + "%";
+
+    if (el.boardHeightRange) el.boardHeightRange.value = state.boardMinHeight;
+    if (el.boardHeightValue) el.boardHeightValue.textContent = state.boardMinHeight + "px";
+
+    if (el.boardGapRange) el.boardGapRange.value = state.boardGap;
+    if (el.boardGapValue) el.boardGapValue.textContent = state.boardGap + "px";
 
     syncColorInputsFromTheme();
 
@@ -1462,19 +1604,11 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function getGridForCount(count) {
-    if (window.innerWidth <= 640) {
-      if (count === 6) return { cols: 3, rows: 2 };
-      if (count === 8) return { cols: 4, rows: 2 };
-      if (count === 10) return { cols: 5, rows: 2 };
-      if (count === 12) return { cols: 3, rows: 4 };
-      return { cols: 4, rows: 4 };
-    }
-
-    if (count === 6) return { cols: 3, rows: 2 };
-    if (count === 8) return { cols: 4, rows: 2 };
-    if (count === 10) return { cols: 5, rows: 2 };
-    if (count === 12) return { cols: 4, rows: 3 };
-    return { cols: 4, rows: 4 };
+    const cols = state.columns || DEFAULTS.columns;
+    return {
+      cols: cols,
+      rows: Math.ceil(count / cols)
+    };
   }
 
   function updateBoardShellMode() {
@@ -1483,12 +1617,33 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function applyBoardLayout() {
-    const count = state.deck.length || state.activeCardCount || state.cardCount;
-    const grid = getGridForCount(count);
-    el.board.style.gridTemplateColumns = "repeat(" + grid.cols + ", 1fr)";
-    el.board.style.gridTemplateRows = "repeat(" + grid.rows + ", 1fr)";
-    el.board.setAttribute("data-card-count", String(count));
+  const count = state.deck.length || state.activeCardCount || state.cardCount;
+  const grid = getGridForCount(count);
+  const useFixedHeight = state.boardMinHeight > 0;
+
+  el.board.style.display = "grid";
+  el.board.style.gridTemplateColumns = "repeat(" + grid.cols + ", minmax(0, 1fr))";
+  el.board.style.gridAutoFlow = "row";
+
+  if (useFixedHeight) {
+    el.board.style.height = "100%";
+    el.board.style.gridTemplateRows = "repeat(" + grid.rows + ", minmax(0, 1fr))";
+    el.board.style.gridAutoRows = "1fr";
+    el.board.style.alignItems = "stretch";
+    el.board.style.alignContent = "stretch";
+  } else {
+    el.board.style.height = "";
+    el.board.style.gridTemplateRows = "none";
+    el.board.style.removeProperty("grid-template-rows");
+    el.board.style.gridAutoRows = "auto";
+    el.board.style.alignItems = "start";
+    el.board.style.alignContent = "start";
   }
+
+  el.board.setAttribute("data-card-count", String(count));
+  el.board.setAttribute("data-columns", String(grid.cols));
+  app.setAttribute("data-columns", String(grid.cols));
+}
 
   async function buildDeck(cardCountOverride) {
     const cacheBust = (location.href.indexOf("?") > -1 ? "&" : "?") + "t=" + Date.now();
@@ -1678,6 +1833,15 @@ document.addEventListener("DOMContentLoaded", function () {
       const card = document.createElement("div");
       card.className = "fp-card";
       card.dataset.k = src;
+      card.style.width = "100%";
+
+if (state.boardMinHeight > 0) {
+  card.style.height = "100%";
+  card.style.aspectRatio = "";
+} else {
+  card.style.height = "";
+  card.style.aspectRatio = getCardAspectRatio();
+}
 
       const shouldStayMatched = preserveMatched && matchedCounts[src] > 0;
 
@@ -1900,6 +2064,19 @@ document.addEventListener("DOMContentLoaded", function () {
     }, 220);
   }
 
+  function rerenderBoardForColumnChange() {
+    applyBoardLayout();
+
+    if (!state.deck.length) return;
+
+    if (state.gameActive) {
+      renderBoard(false, true);
+      return;
+    }
+
+    renderBoard(state.idlePreview, false);
+  }
+
   function showNameEntry() {
     clearTimeout(state.autoBackTimer);
     stopIdleRefreshTimer();
@@ -2114,6 +2291,30 @@ document.addEventListener("DOMContentLoaded", function () {
     state.activeWinTarget = getActiveWinTargetForDeck(state.cardCount, 1);
   }
 
+  function hideCountdown(immediate) {
+    if (immediate) {
+      el.countdown.classList.remove("show");
+      el.countdown.classList.add("hidden");
+      return;
+    }
+
+    el.countdown.classList.remove("show");
+    setTimeout(function () {
+      el.countdown.classList.add("hidden");
+    }, 280);
+  }
+
+  function showCountdownValue(value) {
+    el.countdown.textContent = value;
+    el.countdown.classList.remove("hidden");
+
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        el.countdown.classList.add("show");
+      });
+    });
+  }
+
   function goIdle() {
     clearTimeout(state.autoBackTimer);
     clearInterval(state.roundTimerId);
@@ -2128,7 +2329,7 @@ document.addEventListener("DOMContentLoaded", function () {
     state.gameActive = false;
 
     el.center.classList.add("hidden");
-    el.countdown.classList.add("hidden");
+    hideCountdown(true);
     el.roundTransition.classList.remove("show");
     el.roundTransition.classList.add("hidden");
 
@@ -2150,20 +2351,23 @@ document.addEventListener("DOMContentLoaded", function () {
     let value = state.startCountdown;
 
     if (value <= 0) {
-      el.countdown.classList.add("hidden");
+      hideCountdown(true);
       done();
       return;
     }
 
-    el.countdown.textContent = value;
-    el.countdown.classList.remove("hidden");
+    showCountdownValue(value);
 
     const id = setInterval(function () {
       value -= 1;
+
       if (value <= 0) {
         clearInterval(id);
-        el.countdown.classList.add("hidden");
-        done();
+        hideCountdown(false);
+
+        setTimeout(function () {
+          done();
+        }, 280);
       } else {
         el.countdown.textContent = value;
       }
@@ -2231,6 +2435,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     resetRoundState();
 
+    el.center.classList.add("hidden");
+    updateBoardShellMode();
+
     const introTarget = getWinTargetLabelFor(state.cardCount, 1);
     const introTitle = getTitleForTarget(state.cardCount, 1);
     const title = isSurvivalMode() ? "Round 1" : "Start";
@@ -2267,6 +2474,10 @@ document.addEventListener("DOMContentLoaded", function () {
     state.roundTime = DEFAULTS.roundTime;
     state.idleRefreshSeconds = DEFAULTS.idleRefreshSeconds;
     state.cardCount = DEFAULTS.cardCount;
+    state.columns = DEFAULTS.columns;
+    state.boardWidthPercent = DEFAULTS.boardWidthPercent;
+    state.boardMinHeight = DEFAULTS.boardMinHeight;
+    state.boardGap = DEFAULTS.boardGap;
     state.idlePreview = DEFAULTS.idlePreview;
     state.startPreview = DEFAULTS.startPreview;
     state.adminPin = DEFAULTS.adminPin;
@@ -2294,6 +2505,7 @@ document.addEventListener("DOMContentLoaded", function () {
     applyHeaderLogoLayout();
     applyHudOffset();
     applyBoardOffset();
+    applyBoardAreaSizing();
     applyBackgroundImage(state.bgImageUrl);
     applyCustomFont("", "");
     renderLeaderboard();
@@ -2395,6 +2607,7 @@ document.addEventListener("DOMContentLoaded", function () {
     applyHeaderLogoLayout();
     applyHudOffset();
     applyBoardOffset();
+    applyBoardAreaSizing();
     applyBackgroundImage(state.bgImageUrl);
     applyCustomFont(state.customFontDataUrl, state.customFontFileName);
     updateSettingsUI();
@@ -2412,7 +2625,11 @@ document.addEventListener("DOMContentLoaded", function () {
     el.settingsTransferStatus.textContent = "Settings JSON imported successfully.";
   }
 
-  el.play.onclick = showNameEntry;
+  el.play.onclick = function () {
+    el.play.classList.add("hidden");
+    showNameEntry();
+  };
+
   el.start.onclick = startGame;
   el.cancel.onclick = goIdle;
   el.replay.onclick = goIdle;
@@ -2473,6 +2690,45 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  if (el.boardWidthRange) {
+    el.boardWidthRange.addEventListener("input", function () {
+      const value = parseInt(el.boardWidthRange.value, 10);
+      if (!isNaN(value)) {
+        state.boardWidthPercent = Math.max(60, Math.min(100, value));
+        applyBoardAreaSizing();
+        if (el.boardWidthValue) el.boardWidthValue.textContent = state.boardWidthPercent + "%";
+        persistSettings();
+        rerenderBoardForColumnChange();
+      }
+    });
+  }
+
+  if (el.boardHeightRange) {
+    el.boardHeightRange.addEventListener("input", function () {
+      const value = parseInt(el.boardHeightRange.value, 10);
+      if (!isNaN(value)) {
+        state.boardMinHeight = Math.max(0, Math.min(1400, value));
+        applyBoardAreaSizing();
+        if (el.boardHeightValue) el.boardHeightValue.textContent = state.boardMinHeight + "px";
+        persistSettings();
+        rerenderBoardForColumnChange();
+      }
+    });
+  }
+
+  if (el.boardGapRange) {
+    el.boardGapRange.addEventListener("input", function () {
+      const value = parseInt(el.boardGapRange.value, 10);
+      if (!isNaN(value)) {
+        state.boardGap = Math.max(6, Math.min(30, value));
+        applyBoardAreaSizing();
+        if (el.boardGapValue) el.boardGapValue.textContent = state.boardGap + "px";
+        persistSettings();
+        rerenderBoardForColumnChange();
+      }
+    });
+  }
+
   el.savePin.onclick = savePin;
 
   el.winTargets.forEach(function (button) {
@@ -2484,6 +2740,18 @@ document.addEventListener("DOMContentLoaded", function () {
       updateSettingsUI();
       renderLeaderboard();
       persistSettings();
+    };
+  });
+
+  el.columnButtons.forEach(function (button) {
+    button.onclick = function () {
+      const value = parseInt(button.getAttribute("data-columns"), 10);
+      if (COLUMN_OPTIONS.indexOf(value) === -1) return;
+
+      state.columns = value;
+      updateSettingsUI();
+      persistSettings();
+      rerenderBoardForColumnChange();
     };
   });
 
@@ -2694,6 +2962,7 @@ document.addEventListener("DOMContentLoaded", function () {
   applyHeaderLogoLayout();
   applyHudOffset();
   applyBoardOffset();
+  applyBoardAreaSizing();
   applyBackgroundImage(state.bgImageUrl);
   applyCustomFont(state.customFontDataUrl, state.customFontFileName);
   updateSettingsUI();
