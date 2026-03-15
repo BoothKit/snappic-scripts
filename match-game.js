@@ -1,7 +1,17 @@
 document.addEventListener("DOMContentLoaded", function () {
-document.addEventListener("contextmenu", function(e){
-  e.preventDefault();
-});  
+  document.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+
+  // ── Block long-press / touch-hold saving & context menus everywhere on the game ──
+  document.addEventListener("touchstart", function(e){
+    if (e.target.closest && e.target.closest("#fp-admin-modal")) return;
+    e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener("touchend", function(e){
+    if (e.target.closest && e.target.closest("#fp-admin-modal")) return;
+    e.preventDefault();
+  }, { passive: false });
+
   const host = document.querySelector("#content");
   const galleryImgs = [...document.querySelectorAll("#gallery .grid-item img")];
   if (!host || galleryImgs.length < 6) return;
@@ -40,10 +50,8 @@ document.addEventListener("contextmenu", function(e){
     adminUnlocked: false,
     adminPin: "1111",
     showCursor: true,
-
     hudOffsetY: 0,
     boardOffsetY: 0,
-
     rounds: 1,
     roundDifficulty: "same",
     currentRound: 1,
@@ -52,7 +60,6 @@ document.addEventListener("contextmenu", function(e){
     activeRoundTime: 20,
     activeCardCount: 12,
     activeWinTarget: 1,
-
     theme: {
       bg: "#0F1115",
       accent: "#FFFFFF",
@@ -60,13 +67,11 @@ document.addEventListener("contextmenu", function(e){
       card: "#151821",
       panel: "#1C1F27"
     },
-
     logoUrl: "https://theboothkit.com/wp-content/uploads/2026/02/Site-Logo.png",
     headerLogoUrl: "https://theboothkit.com/wp-content/uploads/2026/02/Site-Logo.png",
     headerLogoHeight: 56,
     headerLogoMaxWidth: 240,
     headerLogoOffsetY: 200,
-
     bgImageUrl: "",
     customFontDataUrl: "",
     customFontFileName: "",
@@ -75,282 +80,255 @@ document.addEventListener("contextmenu", function(e){
 
   const state = JSON.parse(JSON.stringify(DEFAULTS));
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Global styles injected at runtime
+  // ─────────────────────────────────────────────────────────────────────────────
   function injectGlobalUiStyles() {
     if (document.getElementById("fp-runtime-ui-styles")) return;
-
     const style = document.createElement("style");
     style.id = "fp-runtime-ui-styles";
     style.textContent = `
-      html,
-      body{
-        scrollbar-width:none !important;
-        -ms-overflow-style:none !important;
+      html, body {
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+      }
+      html::-webkit-scrollbar, body::-webkit-scrollbar {
+        width: 0 !important; height: 0 !important;
+        display: none !important; background: transparent !important;
       }
 
-      html::-webkit-scrollbar,
-      body::-webkit-scrollbar{
-        width:0 !important;
-        height:0 !important;
-        display:none !important;
-        background:transparent !important;
+      /* ── Block long-press / callout / text selection on game elements ── */
+      #fp-game, #fp-game * {
+        -webkit-touch-callout: none !important;
+        -webkit-user-select: none !important;
+        user-select: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+      }
+      /* Re-allow selection inside admin panel inputs */
+      #fp-admin-panel input,
+      #fp-admin-panel textarea {
+        -webkit-user-select: text !important;
+        user-select: text !important;
       }
 
-      html::-webkit-scrollbar-thumb,
-      body::-webkit-scrollbar-thumb,
-      html::-webkit-scrollbar-track,
-      body::-webkit-scrollbar-track{
-        background:transparent !important;
+      #fp-admin-panel {
+        scrollbar-width: auto !important;
+        -ms-overflow-style: auto !important;
+      }
+      #fp-admin-panel::-webkit-scrollbar {
+        width: 10px !important; height: 10px !important; display: block !important;
+      }
+      #fp-admin-panel::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,.18) !important; border-radius: 999px !important;
+      }
+      #fp-admin-panel::-webkit-scrollbar-track {
+        background: rgba(255,255,255,.04) !important;
       }
 
-      #fp-admin-panel{
-        scrollbar-width:auto !important;
-        -ms-overflow-style:auto !important;
+      #fp-game, #fp-game * { cursor: none !important; }
+      #fp-game.fp-show-cursor, #fp-game.fp-show-cursor * { cursor: auto !important; }
+
+      #fp-head, #fp-copy, #fp-leaderboard, #fp-leaderboard h3, #fp-leaderboard div {
+        text-align: center !important;
+      }
+      #fp-leaderboard { justify-items: center; }
+      #fp-leaderboard div { width: min(100%, 420px); }
+      #fp-live-leaderboard, #fp-live-leaderboard div { text-align: center !important; }
+
+      /* ── PIN display ── */
+      #fp-admin-pin { display: none !important; }
+      #fp-admin-pin-display {
+        margin: 18px 0 0;
+        width: 100%; padding: 16px 18px; border-radius: 18px;
+        background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14);
+        font-size: 26px; font-weight: 800; letter-spacing: .18em;
+        min-height: 62px; display: flex; align-items: center; justify-content: center;
+        text-transform: uppercase; box-sizing: border-box; text-align: center;
+      }
+      #fp-admin-pin-display.empty { letter-spacing: .04em; font-size: 18px; opacity: .72; }
+      #fp-admin-pin-keys {
+        display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin: 16px 0 0;
+      }
+      .fp-admin-pin-key {
+        padding: 14px 8px; border-radius: 14px;
+        border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.08);
+        color: #fff; font-size: 18px; font-weight: 800;
+        text-align: center; cursor: pointer;
+        user-select: none; -webkit-user-select: none;
       }
 
-      #fp-admin-panel::-webkit-scrollbar{
-        width:10px !important;
-        height:10px !important;
-        display:block !important;
+      /* ── Keyboard ── */
+      #fp-keys {
+        display: grid; grid-template-columns: repeat(10,1fr); gap: 10px; margin: 0 0 18px;
+      }
+      .fp-key {
+        padding: 14px 8px; border-radius: 14px;
+        border: 1px solid var(--fp-key-border); background: var(--fp-key-bg);
+        color: var(--fp-text); font-size: 18px; font-weight: 800;
+        text-align: center; cursor: pointer;
+        user-select: none; -webkit-user-select: none;
+      }
+      .fp-key.bottom-key { margin-top: 2px; }
+      .fp-key.bottom-left, .fp-key.bottom-right { grid-column: span 5; }
+
+      /* ── Status flash ── */
+      #fp-status-flash {
+        position: fixed; left: 50%; top: 50%;
+        transform: translate(-50%,-50%) scale(.72);
+        z-index: 90;
+        min-width: min(86vw, 420px); max-width: min(90vw, 520px);
+        padding: 20px 26px; border-radius: 28px;
+        background: linear-gradient(135deg, rgba(0,0,0,.88), rgba(20,20,20,.96));
+        border: 1px solid rgba(255,255,255,.18);
+        box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 26px rgba(255,255,255,.12);
+        text-align: center; opacity: 0; pointer-events: none;
+        transition: opacity .22s ease, transform .22s ease; display: none;
+      }
+      #fp-status-flash.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+      #fp-status-flash.hidden { display: none; }
+      #fp-status-flash .fp-status-line-1 {
+        display: block; font-size: 28px; font-weight: 900;
+        letter-spacing: .16em; text-transform: uppercase; line-height: 1;
+      }
+      #fp-status-flash .fp-status-line-2 {
+        display: block; margin-top: 8px; font-size: 15px; font-weight: 800;
+        letter-spacing: .28em; text-transform: uppercase; opacity: .84; line-height: 1.1;
       }
 
-      #fp-admin-panel::-webkit-scrollbar-thumb{
-        background:rgba(255,255,255,.18) !important;
-        border-radius:999px !important;
+      @keyframes fpShuffleShake {
+        0%{transform:translateX(0)} 20%{transform:translateX(-8px)}
+        40%{transform:translateX(8px)} 60%{transform:translateX(-6px)}
+        80%{transform:translateX(6px)} 100%{transform:translateX(0)}
+      }
+      #fp-board.fp-reshuffle { animation: fpShuffleShake .35s ease; }
+
+      /* ── COUNTDOWN: always centered, full viewport ── */
+      #fp-countdown {
+        position: fixed !important;
+        top: 0 !important; left: 0 !important;
+        right: 0 !important; bottom: 0 !important;
+        width: 100vw !important; height: 100vh !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 86 !important;
+      }
+      #fp-countdown.hidden { display: none !important; }
+
+      /* ── ROUND TRANSITION: always centered, full viewport ── */
+      #fp-round-transition {
+        position: fixed !important;
+        top: 0 !important; left: 0 !important;
+        right: 0 !important; bottom: 0 !important;
+        width: 100vw !important; height: 100vh !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 24px !important;
+        background: rgba(0,0,0,.58) !important;
+        backdrop-filter: blur(8px) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+        z-index: 85 !important;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .28s ease;
+      }
+      #fp-round-transition.hidden { display: none !important; }
+      #fp-round-transition.show { opacity: 1; pointer-events: auto; }
+      #fp-round-transition-card {
+        width: min(92vw, 540px) !important;
+        max-width: min(92vw, 540px) !important;
+        margin: 0 auto !important;
+        background: var(--fp-panel) !important;
+        border: 1px solid rgba(255,255,255,.14) !important;
+        border-radius: 26px !important;
+        padding: 28px 24px !important;
+        text-align: center !important;
+        box-shadow: 0 28px 80px rgba(0,0,0,.34) !important;
       }
 
-      #fp-admin-panel::-webkit-scrollbar-track{
-        background:rgba(255,255,255,.04) !important;
+      /* ── Frosted glass admin during slider drag ── */
+      #fp-admin-modal.fp-slider-active #fp-admin-backdrop {
+        background: rgba(0,0,0,.18) !important;
+        backdrop-filter: blur(2px) !important;
+        -webkit-backdrop-filter: blur(2px) !important;
+        transition: background .2s ease, backdrop-filter .2s ease;
+      }
+      #fp-admin-modal.fp-slider-active #fp-admin-panel {
+        background: rgba(20,22,28,.55) !important;
+        backdrop-filter: blur(22px) saturate(160%) !important;
+        -webkit-backdrop-filter: blur(22px) saturate(160%) !important;
+        border-color: rgba(255,255,255,.22) !important;
+        transition: background .2s ease, backdrop-filter .2s ease;
+      }
+      #fp-admin-modal #fp-admin-backdrop {
+        transition: background .35s ease, backdrop-filter .35s ease;
+      }
+      #fp-admin-modal #fp-admin-panel {
+        transition: background .35s ease, backdrop-filter .35s ease;
       }
 
-      #fp-game,
-      #fp-game *{
-        cursor:none !important;
+      /* ── Slider value readout style ── */
+      .fp-slider-row {
+        display: flex; flex-direction: column; gap: 4px; margin-top: 0;
+      }
+      .fp-slider-value {
+        font-size: 13px; font-weight: 700; opacity: .72;
+        text-align: right; letter-spacing: .04em;
+      }
+      input[type="range"].fp-admin-number {
+        -webkit-appearance: none; appearance: none;
+        width: 100%; height: 6px; border-radius: 999px;
+        background: rgba(255,255,255,.14); outline: none;
+        border: none; padding: 0; cursor: pointer;
+        margin-top: 4px;
+      }
+      input[type="range"].fp-admin-number::-webkit-slider-thumb {
+        -webkit-appearance: none; appearance: none;
+        width: 20px; height: 20px; border-radius: 50%;
+        background: #fff; cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0,0,0,.35);
+      }
+      input[type="range"].fp-admin-number::-moz-range-thumb {
+        width: 20px; height: 20px; border-radius: 50%;
+        background: #fff; cursor: pointer; border: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,.35);
       }
 
-      #fp-game.fp-show-cursor,
-      #fp-game.fp-show-cursor *{
-        cursor:auto !important;
+      /* ── Card edge fix: overflow visible on board shell + padding buffer ── */
+      #fp-board-shell {
+        overflow: visible !important;
+        padding: 4px !important;
+      }
+      #fp-board {
+        overflow: visible !important;
+      }
+      .fp-card {
+        overflow: visible !important;
+      }
+      .fp-inner {
+        overflow: visible !important;
+      }
+      /* The FACE still clips its content but we give perspective room */
+      #fp-board-shell {
+        isolation: isolate;
       }
 
-      #fp-head,
-      #fp-copy,
-      #fp-leaderboard,
-      #fp-leaderboard h3,
-      #fp-leaderboard div{
-        text-align:center !important;
-      }
-
-      #fp-leaderboard{
-        justify-items:center;
-      }
-
-      #fp-leaderboard div{
-        width:min(100%, 420px);
-      }
-
-      #fp-live-leaderboard,
-      #fp-live-leaderboard div{
-        text-align:center !important;
-      }
-
-      #fp-admin-pin{
-        display:none !important;
-      }
-
-      #fp-admin-pin-display{
-        margin:18px 0 0;
-        width:100%;
-        padding:16px 18px;
-        border-radius:18px;
-        background:rgba(255,255,255,.08);
-        border:1px solid rgba(255,255,255,.14);
-        font-size:26px;
-        font-weight:800;
-        letter-spacing:.18em;
-        min-height:62px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        text-transform:uppercase;
-        box-sizing:border-box;
-        text-align:center;
-      }
-
-      #fp-admin-pin-display.empty{
-        letter-spacing:.04em;
-        font-size:18px;
-        opacity:.72;
-      }
-
-      #fp-admin-pin-keys{
-        display:grid;
-        grid-template-columns:repeat(3,1fr);
-        gap:10px;
-        margin:16px 0 0;
-      }
-
-      .fp-admin-pin-key{
-        padding:14px 8px;
-        border-radius:14px;
-        border:1px solid rgba(255,255,255,.14);
-        background:rgba(255,255,255,.08);
-        color:#fff;
-        font-size:18px;
-        font-weight:800;
-        text-align:center;
-        cursor:pointer;
-        user-select:none;
-        -webkit-user-select:none;
-      }
-
-      #fp-keys{
-        display:grid;
-        grid-template-columns:repeat(10,1fr);
-        gap:10px;
-        margin:0 0 18px;
-      }
-
-      .fp-key{
-        padding:14px 8px;
-        border-radius:14px;
-        border:1px solid var(--fp-key-border);
-        background:var(--fp-key-bg);
-        color:var(--fp-text);
-        font-size:18px;
-        font-weight:800;
-        text-align:center;
-        cursor:pointer;
-        user-select:none;
-        -webkit-user-select:none;
-      }
-
-      .fp-key.bottom-key{
-        margin-top:2px;
-      }
-
-      .fp-key.bottom-left,
-      .fp-key.bottom-right{
-        grid-column:span 5;
-      }
-
-      #fp-status-flash{
-        position:fixed;
-        left:50%;
-        top:50%;
-        transform:translate(-50%,-50%) scale(.72);
-        z-index:90;
-        min-width:min(86vw, 420px);
-        max-width:min(90vw, 520px);
-        padding:20px 26px;
-        border-radius:28px;
-        background:linear-gradient(135deg, rgba(0,0,0,.88), rgba(20,20,20,.96));
-        border:1px solid rgba(255,255,255,.18);
-        box-shadow:0 30px 80px rgba(0,0,0,.55), 0 0 26px rgba(255,255,255,.12);
-        text-align:center;
-        opacity:0;
-        pointer-events:none;
-        transition:opacity .22s ease, transform .22s ease;
-        display:none;
-      }
-
-      #fp-status-flash.show{
-        opacity:1;
-        transform:translate(-50%,-50%) scale(1);
-      }
-
-      #fp-status-flash.hidden{
-        display:none;
-      }
-
-      #fp-status-flash .fp-status-line-1{
-        display:block;
-        font-size:28px;
-        font-weight:900;
-        letter-spacing:.16em;
-        text-transform:uppercase;
-        line-height:1;
-      }
-
-      #fp-status-flash .fp-status-line-2{
-        display:block;
-        margin-top:8px;
-        font-size:15px;
-        font-weight:800;
-        letter-spacing:.28em;
-        text-transform:uppercase;
-        opacity:.84;
-        line-height:1.1;
-      }
-
-      @keyframes fpShuffleShake{
-        0%{transform:translateX(0)}
-        20%{transform:translateX(-8px)}
-        40%{transform:translateX(8px)}
-        60%{transform:translateX(-6px)}
-        80%{transform:translateX(6px)}
-        100%{transform:translateX(0)}
-      }
-
-      #fp-board.fp-reshuffle{
-        animation:fpShuffleShake .35s ease;
-      }
-
-      @media (orientation: portrait){
-        #fp-keys{
-          grid-template-columns:repeat(10,1fr) !important;
-        }
-
-        #fp-round-transition{
-          position:fixed !important;
-          inset:0 !important;
-          z-index:85 !important;
-          display:flex !important;
-          align-items:center !important;
-          justify-content:center !important;
-          padding:24px !important;
-          background:rgba(0,0,0,.58) !important;
-          backdrop-filter:blur(8px) !important;
-          -webkit-backdrop-filter:blur(8px) !important;
-          opacity:0;
-          pointer-events:none;
-          transition:opacity .28s ease;
-        }
-
-        #fp-round-transition.hidden{
-          display:none !important;
-        }
-
-        #fp-round-transition.show{
-          opacity:1;
-          pointer-events:auto;
-        }
-
-        #fp-round-transition-card{
-          width:min(92vw,540px) !important;
-          max-width:min(92vw,540px) !important;
-          margin:0 auto !important;
-          background:var(--fp-panel) !important;
-          border:1px solid rgba(255,255,255,.14) !important;
-          border-radius:26px !important;
-          padding:28px 24px !important;
-          text-align:center !important;
-          box-shadow:0 28px 80px rgba(0,0,0,.34) !important;
-        }
-
-        .fp-key.bottom-left,
-        .fp-key.bottom-right{
-          grid-column:span 5 !important;
-        }
+      @media (orientation: portrait) {
+        #fp-keys { grid-template-columns: repeat(10,1fr) !important; }
+        .fp-key.bottom-left, .fp-key.bottom-right { grid-column: span 5 !important; }
       }
     `;
     document.head.appendChild(style);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Build HTML
+  // ─────────────────────────────────────────────────────────────────────────────
   const app = document.createElement("div");
   app.id = "fp-game";
   app.innerHTML =
     '<div id="fp-first-place-banner"></div>' +
-
     '<div id="fp-wrap">' +
       '<div id="fp-top">' +
         '<div id="fp-brand">' +
@@ -430,6 +408,7 @@ document.addEventListener("contextmenu", function(e){
 
             '<div class="fp-admin-grid">' +
 
+              // ── Gameplay ──
               '<div class="fp-admin-section">' +
                 '<h3>Gameplay</h3>' +
                 '<label class="fp-admin-label">Win Target</label>' +
@@ -458,21 +437,21 @@ document.addEventListener("contextmenu", function(e){
                 '</div>' +
 
                 '<label class="fp-admin-label fp-admin-label-top">Columns</label>' +
-'<div id="fp-column-counts" class="fp-chip-group">' +
-  '<button type="button" class="fp-chip" data-columns="2">2 Columns</button>' +
-  '<button type="button" class="fp-chip" data-columns="3">3 Columns</button>' +
-  '<button type="button" class="fp-chip" data-columns="4">4 Columns</button>' +
-  '<button type="button" class="fp-chip" data-columns="5">5 Columns</button>' +
-  '<button type="button" class="fp-chip" data-columns="6">6 Columns</button>' +
-'</div>' +
-                '<div class="fp-admin-note">Choose how many columns the board uses. More columns makes cards shorter. Fewer columns makes cards taller.</div>' +
+                '<div id="fp-column-counts" class="fp-chip-group">' +
+                  '<button type="button" class="fp-chip" data-columns="2">2 Columns</button>' +
+                  '<button type="button" class="fp-chip" data-columns="3">3 Columns</button>' +
+                  '<button type="button" class="fp-chip" data-columns="4">4 Columns</button>' +
+                  '<button type="button" class="fp-chip" data-columns="5">5 Columns</button>' +
+                  '<button type="button" class="fp-chip" data-columns="6">6 Columns</button>' +
+                '</div>' +
+                '<div class="fp-admin-note">Choose how many columns the board uses.</div>' +
 
                 '<label class="fp-admin-label fp-admin-label-top" for="fp-board-width-range">Card Area Width (%)</label>' +
                 '<input id="fp-board-width-range" class="fp-admin-number" type="range" min="60" max="100" step="1">' +
                 '<div id="fp-board-width-value" class="fp-admin-note">100%</div>' +
 
                 '<label class="fp-admin-label fp-admin-label-top" for="fp-board-height-range">Card Area Min Height (px)</label>' +
-                '<input id="fp-board-height-range" class="fp-admin-number" type="range" min="200" max="1400" step="10">' +
+                '<input id="fp-board-height-range" class="fp-admin-number" type="range" min="0" max="1400" step="10">' +
                 '<div id="fp-board-height-value" class="fp-admin-note">0px</div>' +
 
                 '<label class="fp-admin-label fp-admin-label-top" for="fp-board-gap-range">Card Gap</label>' +
@@ -480,15 +459,15 @@ document.addEventListener("contextmenu", function(e){
                 '<div id="fp-board-gap-value" class="fp-admin-note">16px</div>' +
 
                 '<label class="fp-admin-label fp-admin-label-top">Card Layout</label>' +
-'<div id="fp-card-counts" class="fp-chip-group">' +
-  '<button type="button" class="fp-chip" data-card-count="6">6 Cards</button>' +
-  '<button type="button" class="fp-chip" data-card-count="8">8 Cards</button>' +
-  '<button type="button" class="fp-chip" data-card-count="10">10 Cards</button>' +
-  '<button type="button" class="fp-chip" data-card-count="12">12 Cards</button>' +
-  '<button type="button" class="fp-chip" data-card-count="16">16 Cards</button>' +
-  '<button type="button" class="fp-chip" data-card-count="20">20 Cards</button>' +
-  '<button type="button" class="fp-chip" data-card-count="30">30 Cards</button>' +
-'</div>' +
+                '<div id="fp-card-counts" class="fp-chip-group">' +
+                  '<button type="button" class="fp-chip" data-card-count="6">6 Cards</button>' +
+                  '<button type="button" class="fp-chip" data-card-count="8">8 Cards</button>' +
+                  '<button type="button" class="fp-chip" data-card-count="10">10 Cards</button>' +
+                  '<button type="button" class="fp-chip" data-card-count="12">12 Cards</button>' +
+                  '<button type="button" class="fp-chip" data-card-count="16">16 Cards</button>' +
+                  '<button type="button" class="fp-chip" data-card-count="20">20 Cards</button>' +
+                  '<button type="button" class="fp-chip" data-card-count="30">30 Cards</button>' +
+                '</div>' +
 
                 '<label class="fp-admin-label fp-admin-label-top">Rounds</label>' +
                 '<div id="fp-round-counts" class="fp-chip-group">' +
@@ -509,21 +488,13 @@ document.addEventListener("contextmenu", function(e){
                 '</div>' +
 
                 '<div class="fp-toggle-row">' +
-                  '<label class="fp-toggle">' +
-                    '<input id="fp-setting-idle-preview" type="checkbox">' +
-                    '<span>Idle photo preview</span>' +
-                  '</label>' +
-                  '<label class="fp-toggle">' +
-                    '<input id="fp-setting-start-preview" type="checkbox">' +
-                    '<span>Start photo preview</span>' +
-                  '</label>' +
-                  '<label class="fp-toggle">' +
-                    '<input id="fp-setting-show-cursor" type="checkbox">' +
-                    '<span>Show mouse cursor</span>' +
-                  '</label>' +
+                  '<label class="fp-toggle"><input id="fp-setting-idle-preview" type="checkbox"><span>Idle photo preview</span></label>' +
+                  '<label class="fp-toggle"><input id="fp-setting-start-preview" type="checkbox"><span>Start photo preview</span></label>' +
+                  '<label class="fp-toggle"><input id="fp-setting-show-cursor" type="checkbox"><span>Show mouse cursor</span></label>' +
                 '</div>' +
               '</div>' +
 
+              // ── Theme Presets (MOVED ABOVE Custom Colors) ──
               '<div class="fp-admin-section">' +
                 '<h3>Theme Presets</h3>' +
                 '<div class="fp-chip-group">' +
@@ -533,51 +504,70 @@ document.addEventListener("contextmenu", function(e){
                 '</div>' +
               '</div>' +
 
+              // ── Custom Colors ──
+              '<div class="fp-admin-section fp-admin-section-full">' +
+                '<h3>Custom Colors</h3>' +
+                '<div class="fp-color-grid">' +
+                  '<div class="fp-color-row"><label>Background</label><input type="color" id="fp-color-bg-picker"><input type="text" id="fp-color-bg-text" class="fp-admin-text" placeholder="#0F1115"></div>' +
+                  '<div class="fp-color-row"><label>Accent / Buttons</label><input type="color" id="fp-color-accent-picker"><input type="text" id="fp-color-accent-text" class="fp-admin-text" placeholder="#FFFFFF"></div>' +
+                  '<div class="fp-color-row"><label>Accent Text</label><input type="color" id="fp-color-accent-text-picker"><input type="text" id="fp-color-accent-text-text" class="fp-admin-text" placeholder="#111111"></div>' +
+                  '<div class="fp-color-row"><label>Card Front</label><input type="color" id="fp-color-card-picker"><input type="text" id="fp-color-card-text" class="fp-admin-text" placeholder="#151821"></div>' +
+                  '<div class="fp-color-row"><label>Popup Panel</label><input type="color" id="fp-color-panel-picker"><input type="text" id="fp-color-panel-text" class="fp-admin-text" placeholder="#1C1F27"></div>' +
+                '</div>' +
+                '<div class="fp-admin-actions fp-admin-actions-wrap">' +
+                  '<button id="fp-apply-theme" type="button">Apply Colors</button>' +
+                  '<button id="fp-reset-theme" type="button" class="fp-admin-secondary">Reset Theme</button>' +
+                  '<button id="fp-reset-leaderboard" type="button" class="fp-admin-danger">Reset Leaderboard</button>' +
+                  '<button id="fp-reset-all" type="button" class="fp-admin-danger">Reset All Settings</button>' +
+                '</div>' +
+              '</div>' +
+
+              // ── Brand Assets ──
               '<div class="fp-admin-section">' +
                 '<h3>Brand Assets</h3>' +
 
                 '<label class="fp-admin-label" for="fp-header-logo-upload">Header Logo Upload</label>' +
                 '<input id="fp-header-logo-upload" type="file" accept="image/*" class="fp-admin-file">' +
                 '<div id="fp-header-logo-status" class="fp-admin-note">Using default header logo.</div>' +
-                '<div class="fp-admin-actions">' +
-                  '<button id="fp-remove-header-logo" type="button" class="fp-admin-secondary">Reset Header Logo</button>' +
-                '</div>' +
+                '<div class="fp-admin-actions"><button id="fp-remove-header-logo" type="button" class="fp-admin-secondary">Reset Header Logo</button></div>' +
 
+                // Header Logo Size → SLIDER
                 '<label class="fp-admin-label fp-admin-label-top" for="fp-header-logo-size">Header Logo Size</label>' +
-                '<input id="fp-header-logo-size" class="fp-admin-number" type="number" min="24" max="220" step="1">' +
+                '<input id="fp-header-logo-size" class="fp-admin-number" type="range" min="24" max="220" step="1">' +
+                '<div id="fp-header-logo-size-value" class="fp-admin-note">56px</div>' +
 
+                // Header Logo Move Up → SLIDER
                 '<label class="fp-admin-label fp-admin-label-top" for="fp-header-logo-offset">Header Logo Move Up</label>' +
-                '<input id="fp-header-logo-offset" class="fp-admin-number" type="number" min="0" max="500" step="1">' +
-                '<div class="fp-admin-note">Use larger numbers to move the header logo upward.</div>' +
+                '<input id="fp-header-logo-offset" class="fp-admin-number" type="range" min="0" max="500" step="1">' +
+                '<div id="fp-header-logo-offset-value" class="fp-admin-note">200px</div>' +
+                '<div class="fp-admin-note" style="margin-top:4px">Use larger values to move the header logo upward.</div>' +
 
+                // Move Header / HUD → SLIDER
                 '<label class="fp-admin-label fp-admin-label-top" for="fp-hud-offset">Move Header / HUD Up or Down</label>' +
-                '<input id="fp-hud-offset" class="fp-admin-number" type="number" min="-500" max="500" step="1">' +
-                '<div class="fp-admin-note">Negative moves the title, timer, leaderboard, and settings row up. Positive moves it down.</div>' +
+                '<input id="fp-hud-offset" class="fp-admin-number" type="range" min="-500" max="500" step="1">' +
+                '<div id="fp-hud-offset-value" class="fp-admin-note">0px</div>' +
+                '<div class="fp-admin-note" style="margin-top:4px">Negative moves the title, timer, leaderboard, and settings row up. Positive moves it down.</div>' +
 
+                // Move Card Area → SLIDER
                 '<label class="fp-admin-label fp-admin-label-top" for="fp-board-offset">Move Card Area Up or Down</label>' +
-                '<input id="fp-board-offset" class="fp-admin-number" type="number" min="-500" max="500" step="1">' +
-                '<div class="fp-admin-note">Negative moves the cards up. Positive moves them down.</div>' +
+                '<input id="fp-board-offset" class="fp-admin-number" type="range" min="-500" max="500" step="1">' +
+                '<div id="fp-board-offset-value" class="fp-admin-note">0px</div>' +
+                '<div class="fp-admin-note" style="margin-top:4px">Negative moves the cards up. Positive moves them down.</div>' +
 
                 '<label class="fp-admin-label fp-admin-label-top" for="fp-logo-upload">Card Back Logo Upload</label>' +
                 '<input id="fp-logo-upload" type="file" accept="image/*" class="fp-admin-file">' +
                 '<div id="fp-logo-status" class="fp-admin-note">Using current saved card-back logo.</div>' +
-                '<div class="fp-admin-actions">' +
-                  '<button id="fp-remove-logo" type="button" class="fp-admin-secondary">Remove Card Back Logo</button>' +
-                '</div>' +
+                '<div class="fp-admin-actions"><button id="fp-remove-logo" type="button" class="fp-admin-secondary">Remove Card Back Logo</button></div>' +
 
                 '<label class="fp-admin-label fp-admin-label-top" for="fp-bg-upload">Background Image Upload</label>' +
                 '<input id="fp-bg-upload" type="file" accept="image/*" class="fp-admin-file">' +
                 '<div id="fp-bg-status" class="fp-admin-note">Using color background only.</div>' +
-                '<div class="fp-admin-actions">' +
-                  '<button id="fp-remove-bg" type="button" class="fp-admin-secondary">Remove Background Image</button>' +
-                '</div>' +
+                '<div class="fp-admin-actions"><button id="fp-remove-bg" type="button" class="fp-admin-secondary">Remove Background Image</button></div>' +
 
                 '<label class="fp-admin-label fp-admin-label-top" for="fp-font-upload">Custom Font Upload</label>' +
                 '<input id="fp-font-upload" type="file" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2" class="fp-admin-file">' +
                 '<div id="fp-font-status" class="fp-admin-note">Using default font.</div>' +
-                '<div class="fp-admin-actions">' +
-                  '<button id="fp-remove-font" type="button" class="fp-admin-secondary">Remove Custom Font</button>' +
-                '</div>' +
+                '<div class="fp-admin-actions"><button id="fp-remove-font" type="button" class="fp-admin-secondary">Remove Custom Font</button></div>' +
 
                 '<label class="fp-admin-label fp-admin-label-top">Settings Transfer</label>' +
                 '<input id="fp-import-settings-file" type="file" accept="application/json,.json">' +
@@ -588,64 +578,17 @@ document.addEventListener("contextmenu", function(e){
                 '</div>' +
               '</div>' +
 
+              // ── Security ──
               '<div class="fp-admin-section">' +
                 '<h3>Security</h3>' +
                 '<label class="fp-admin-label" for="fp-current-pin">Current PIN</label>' +
                 '<input id="fp-current-pin" class="fp-admin-text" type="password" inputmode="numeric" placeholder="Enter current PIN">' +
-
                 '<label class="fp-admin-label fp-admin-label-top" for="fp-new-pin">New PIN</label>' +
                 '<input id="fp-new-pin" class="fp-admin-text" type="password" inputmode="numeric" placeholder="Enter new PIN">' +
-
                 '<label class="fp-admin-label fp-admin-label-top" for="fp-confirm-pin">Confirm New PIN</label>' +
                 '<input id="fp-confirm-pin" class="fp-admin-text" type="password" inputmode="numeric" placeholder="Confirm new PIN">' +
-
-                '<div class="fp-admin-actions">' +
-                  '<button id="fp-save-pin" type="button">Change PIN</button>' +
-                '</div>' +
+                '<div class="fp-admin-actions"><button id="fp-save-pin" type="button">Change PIN</button></div>' +
                 '<div id="fp-pin-status" class="fp-admin-note"></div>' +
-              '</div>' +
-
-              '<div class="fp-admin-section fp-admin-section-full">' +
-                '<h3>Custom Colors</h3>' +
-
-                '<div class="fp-color-grid">' +
-                  '<div class="fp-color-row">' +
-                    '<label>Background</label>' +
-                    '<input type="color" id="fp-color-bg-picker">' +
-                    '<input type="text" id="fp-color-bg-text" class="fp-admin-text" placeholder="#0F1115">' +
-                  '</div>' +
-
-                  '<div class="fp-color-row">' +
-                    '<label>Accent / Buttons</label>' +
-                    '<input type="color" id="fp-color-accent-picker">' +
-                    '<input type="text" id="fp-color-accent-text" class="fp-admin-text" placeholder="#FFFFFF">' +
-                  '</div>' +
-
-                  '<div class="fp-color-row">' +
-                    '<label>Accent Text</label>' +
-                    '<input type="color" id="fp-color-accent-text-picker">' +
-                    '<input type="text" id="fp-color-accent-text-text" class="fp-admin-text" placeholder="#111111">' +
-                  '</div>' +
-
-                  '<div class="fp-color-row">' +
-                    '<label>Card Front</label>' +
-                    '<input type="color" id="fp-color-card-picker">' +
-                    '<input type="text" id="fp-color-card-text" class="fp-admin-text" placeholder="#151821">' +
-                  '</div>' +
-
-                  '<div class="fp-color-row">' +
-                    '<label>Popup Panel</label>' +
-                    '<input type="color" id="fp-color-panel-picker">' +
-                    '<input type="text" id="fp-color-panel-text" class="fp-admin-text" placeholder="#1C1F27">' +
-                  '</div>' +
-                '</div>' +
-
-                '<div class="fp-admin-actions fp-admin-actions-wrap">' +
-                  '<button id="fp-apply-theme" type="button">Apply Colors</button>' +
-                  '<button id="fp-reset-theme" type="button" class="fp-admin-secondary">Reset Theme</button>' +
-                  '<button id="fp-reset-leaderboard" type="button" class="fp-admin-danger">Reset Leaderboard</button>' +
-                  '<button id="fp-reset-all" type="button" class="fp-admin-danger">Reset All Settings</button>' +
-                '</div>' +
               '</div>' +
 
             '</div>' +
@@ -658,6 +601,9 @@ document.addEventListener("contextmenu", function(e){
   host.appendChild(app);
   injectGlobalUiStyles();
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Element refs
+  // ─────────────────────────────────────────────────────────────────────────────
   const el = {
     boardShell: app.querySelector("#fp-board-shell"),
     board: app.querySelector("#fp-board"),
@@ -683,13 +629,10 @@ document.addEventListener("contextmenu", function(e){
     player: app.querySelector("#fp-player"),
     liveLeaderboard: app.querySelector("#fp-live-leaderboard"),
     firstPlaceBanner: app.querySelector("#fp-first-place-banner"),
-
     headerLogoWrap: app.querySelector("#fp-header-logo-wrap"),
     headerLogo: app.querySelector("#fp-header-logo"),
-
     adminButton: app.querySelector("#fp-admin"),
     leaderboard: app.querySelector("#fp-leaderboard"),
-
     adminModal: app.querySelector("#fp-admin-modal"),
     adminBackdrop: app.querySelector("#fp-admin-backdrop"),
     adminLock: app.querySelector("#fp-admin-lock"),
@@ -700,7 +643,6 @@ document.addEventListener("contextmenu", function(e){
     adminUnlock: app.querySelector("#fp-admin-unlock"),
     adminCloseLock: app.querySelector("#fp-admin-close-lock"),
     adminClose: app.querySelector("#fp-admin-close"),
-
     winTargetsWrap: app.querySelector("#fp-win-targets"),
     winTargets: [...app.querySelectorAll("[data-win]")],
     columnButtons: [...app.querySelectorAll("[data-columns]")],
@@ -715,14 +657,12 @@ document.addEventListener("contextmenu", function(e){
     showCursorInput: app.querySelector("#fp-setting-show-cursor"),
     presetButtons: [...app.querySelectorAll(".fp-preset")],
     winTargetOverrideNote: app.querySelector("#fp-win-target-override-note"),
-
     boardWidthRange: app.querySelector("#fp-board-width-range"),
     boardWidthValue: app.querySelector("#fp-board-width-value"),
     boardHeightRange: app.querySelector("#fp-board-height-range"),
     boardHeightValue: app.querySelector("#fp-board-height-value"),
     boardGapRange: app.querySelector("#fp-board-gap-range"),
     boardGapValue: app.querySelector("#fp-board-gap-value"),
-
     bgPicker: app.querySelector("#fp-color-bg-picker"),
     bgText: app.querySelector("#fp-color-bg-text"),
     accentPicker: app.querySelector("#fp-color-accent-picker"),
@@ -733,37 +673,34 @@ document.addEventListener("contextmenu", function(e){
     cardText: app.querySelector("#fp-color-card-text"),
     panelPicker: app.querySelector("#fp-color-panel-picker"),
     panelText: app.querySelector("#fp-color-panel-text"),
-
     applyTheme: app.querySelector("#fp-apply-theme"),
     resetTheme: app.querySelector("#fp-reset-theme"),
     resetLeaderboard: app.querySelector("#fp-reset-leaderboard"),
     resetAll: app.querySelector("#fp-reset-all"),
-
     logoUpload: app.querySelector("#fp-logo-upload"),
     logoStatus: app.querySelector("#fp-logo-status"),
     removeLogo: app.querySelector("#fp-remove-logo"),
-
     headerLogoUpload: app.querySelector("#fp-header-logo-upload"),
     headerLogoStatus: app.querySelector("#fp-header-logo-status"),
     removeHeaderLogo: app.querySelector("#fp-remove-header-logo"),
     headerLogoSizeInput: app.querySelector("#fp-header-logo-size"),
+    headerLogoSizeValue: app.querySelector("#fp-header-logo-size-value"),
     headerLogoOffsetInput: app.querySelector("#fp-header-logo-offset"),
+    headerLogoOffsetValue: app.querySelector("#fp-header-logo-offset-value"),
     hudOffsetInput: app.querySelector("#fp-hud-offset"),
+    hudOffsetValue: app.querySelector("#fp-hud-offset-value"),
     boardOffsetInput: app.querySelector("#fp-board-offset"),
-
+    boardOffsetValue: app.querySelector("#fp-board-offset-value"),
     bgUpload: app.querySelector("#fp-bg-upload"),
     bgStatus: app.querySelector("#fp-bg-status"),
-
     fontUpload: app.querySelector("#fp-font-upload"),
     fontStatus: app.querySelector("#fp-font-status"),
     removeBg: app.querySelector("#fp-remove-bg"),
     removeFont: app.querySelector("#fp-remove-font"),
-
     exportSettings: app.querySelector("#fp-export-settings"),
     importSettings: app.querySelector("#fp-import-settings"),
     importSettingsFile: app.querySelector("#fp-import-settings-file"),
     settingsTransferStatus: app.querySelector("#fp-settings-transfer-status"),
-
     currentPin: app.querySelector("#fp-current-pin"),
     newPin: app.querySelector("#fp-new-pin"),
     confirmPin: app.querySelector("#fp-confirm-pin"),
@@ -775,10 +712,34 @@ document.addEventListener("contextmenu", function(e){
     el.winTargetOverrideNote.style.display = "";
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Frosted glass on slider drag
+  // ─────────────────────────────────────────────────────────────────────────────
+  function setSliderActive(active) {
+    el.adminModal.classList.toggle("fp-slider-active", active);
+  }
+
+  function bindSliderFrost(input) {
+    if (!input) return;
+    input.addEventListener("mousedown", function() { setSliderActive(true); });
+    input.addEventListener("touchstart", function() { setSliderActive(true); }, { passive: true });
+    input.addEventListener("mouseup", function() { setSliderActive(false); });
+    input.addEventListener("touchend", function() { setSliderActive(false); });
+    input.addEventListener("mouseleave", function() {
+      // only clear if no button held
+      if (!this.matches(":active")) setSliderActive(false);
+    });
+    document.addEventListener("mouseup", function() { setSliderActive(false); });
+    document.addEventListener("touchend", function() { setSliderActive(false); }, { passive: true });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Utility helpers
+  // ─────────────────────────────────────────────────────────────────────────────
   function shuffle(arr) {
-    for (let idx = arr.length - 1; idx > 0; idx--) {
-      const rand = Math.floor(Math.random() * (idx + 1));
-      [arr[idx], arr[rand]] = [arr[rand], arr[idx]];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const r = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[r]] = [arr[r], arr[i]];
     }
     return arr;
   }
@@ -795,8 +756,8 @@ document.addEventListener("contextmenu", function(e){
   function getFontFormatFromName(name) {
     const lower = String(name || "").toLowerCase();
     if (lower.endsWith(".woff2")) return "woff2";
-    if (lower.endsWith(".woff")) return "woff";
-    if (lower.endsWith(".otf")) return "opentype";
+    if (lower.endsWith(".woff"))  return "woff";
+    if (lower.endsWith(".otf"))   return "opentype";
     return "truetype";
   }
 
@@ -808,23 +769,19 @@ document.addEventListener("contextmenu", function(e){
     return state.roundDifficulty === "moreMatches";
   }
 
-  function getCardAspectRatio() {
-    return "4 / 3";
-  }
+  function getCardAspectRatio() { return "4 / 3"; }
 
   function setWinTargetDisabledUi(disabled) {
     if (el.winTargetsWrap) {
       el.winTargetsWrap.classList.toggle("is-disabled", disabled);
       el.winTargetsWrap.setAttribute("aria-disabled", disabled ? "true" : "false");
     }
-
-    el.winTargets.forEach(function (btn) {
+    el.winTargets.forEach(function(btn) {
       btn.classList.toggle("disabled", disabled);
       btn.disabled = disabled;
       btn.setAttribute("aria-disabled", disabled ? "true" : "false");
       btn.tabIndex = disabled ? -1 : 0;
     });
-
     if (el.winTargetOverrideNote) {
       el.winTargetOverrideNote.classList.toggle("show", disabled);
       el.winTargetOverrideNote.setAttribute("aria-hidden", disabled ? "false" : "true");
@@ -838,192 +795,148 @@ document.addEventListener("contextmenu", function(e){
   function getMoreMatchesTarget(roundNumber, deckSize) {
     const pattern = [1, 2, 4, 6, 8, 10, 12];
     const desired = pattern[Math.min(pattern.length - 1, Math.max(0, roundNumber - 1))];
-    const maxPairs = deckSize / 2;
-    return Math.max(1, Math.min(desired, maxPairs));
+    return Math.max(1, Math.min(desired, deckSize / 2));
   }
 
   function getActiveWinTargetForDeck(deckSize, roundNumber) {
-    if (isWinTargetOverridden()) {
-      return getMoreMatchesTarget(roundNumber, deckSize);
-    }
+    if (isWinTargetOverridden()) return getMoreMatchesTarget(roundNumber, deckSize);
     if (state.winTarget === "all") return deckSize / 2;
     return Number(state.winTarget || 1);
   }
 
   function getWinTargetLabelFor(deckSize, roundNumber) {
-    const target = getActiveWinTargetForDeck(deckSize, roundNumber);
-    if (target >= deckSize / 2) return "All Matches";
-    return target + " Match" + (target > 1 ? "es" : "");
+    const t = getActiveWinTargetForDeck(deckSize, roundNumber);
+    if (t >= deckSize / 2) return "All Matches";
+    return t + " Match" + (t > 1 ? "es" : "");
   }
 
   function getTitleForTarget(deckSize, roundNumber) {
-    const target = getActiveWinTargetForDeck(deckSize, roundNumber);
-    return target > 1 ? "Find the Matches" : "Find the Match";
+    return getActiveWinTargetForDeck(deckSize, roundNumber) > 1 ? "Find the Matches" : "Find the Match";
   }
 
   function updateTitleForCurrentTarget() {
     const deckSize = state.deck.length || state.activeCardCount || state.cardCount;
     const title = getTitleForTarget(deckSize, state.currentRound);
-    const titleNode = app.querySelector("#fp-title");
-    if (titleNode) titleNode.textContent = title;
+    const node = app.querySelector("#fp-title");
+    if (node) node.textContent = title;
     if (el.head) el.head.textContent = title;
   }
 
   function getClosestCardCountIndex(count) {
     const exact = CARD_COUNTS.indexOf(count);
     if (exact > -1) return exact;
-
-    let bestIndex = 0;
-    let bestDiff = Infinity;
-
-    CARD_COUNTS.forEach(function (value, index) {
-      const diff = Math.abs(value - count);
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        bestIndex = index;
-      }
+    let best = 0, bestDiff = Infinity;
+    CARD_COUNTS.forEach(function(v, i) {
+      const d = Math.abs(v - count);
+      if (d < bestDiff) { bestDiff = d; best = i; }
     });
-
-    return bestIndex;
+    return best;
   }
 
   function getRoundConfig(roundNumber) {
-    let timer = state.roundTime;
-    let cardCount = state.cardCount;
-
-    if (!isSurvivalMode()) {
-      return {
-        timer: timer,
-        cardCount: cardCount
-      };
-    }
-
-    if (state.roundDifficulty === "lessTime") {
-      timer = Math.max(5, state.roundTime - ((roundNumber - 1) * 2));
-    }
-
+    let timer = state.roundTime, cardCount = state.cardCount;
+    if (!isSurvivalMode()) return { timer, cardCount };
+    if (state.roundDifficulty === "lessTime") timer = Math.max(5, state.roundTime - ((roundNumber - 1) * 2));
     if (state.roundDifficulty === "moreCards") {
-      const startIndex = getClosestCardCountIndex(state.cardCount);
-      const nextIndex = Math.min(CARD_COUNTS.length - 1, startIndex + (roundNumber - 1));
-      cardCount = CARD_COUNTS[nextIndex];
+      const si = getClosestCardCountIndex(state.cardCount);
+      cardCount = CARD_COUNTS[Math.min(CARD_COUNTS.length - 1, si + (roundNumber - 1))];
     }
-
-    return {
-      timer: timer,
-      cardCount: cardCount
-    };
+    return { timer, cardCount };
   }
 
   function getCurrentLeaderboardCategory() {
-    const columnKey = "columns:" + state.columns;
-    if (isSurvivalMode()) {
-      return "survival|" + state.roundDifficulty + "|baseTarget:" + state.winTarget + "|baseCards:" + state.cardCount + "|" + columnKey;
-    }
-    return "goal|target:" + state.winTarget + "|cards:" + state.cardCount + "|" + columnKey;
+    const col = "columns:" + state.columns;
+    if (isSurvivalMode()) return "survival|" + state.roundDifficulty + "|baseTarget:" + state.winTarget + "|baseCards:" + state.cardCount + "|" + col;
+    return "goal|target:" + state.winTarget + "|cards:" + state.cardCount + "|" + col;
   }
 
   function getCurrentLeaderboardHeading() {
     return isSurvivalMode() ? "Survival Leaderboard" : "Leaderboard";
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Apply functions
+  // ─────────────────────────────────────────────────────────────────────────────
   function applyCustomFont(dataUrl, fileName) {
     state.customFontDataUrl = dataUrl || "";
     state.customFontFileName = fileName || "";
     state.customFontFamily = state.customFontDataUrl
-      ? ("fp-user-font-" + slugifyFontName(fileName || "custom"))
-      : "";
+      ? "fp-user-font-" + slugifyFontName(fileName || "custom") : "";
 
     const existing = document.getElementById("fp-custom-font-style");
     if (existing) existing.remove();
 
     if (!state.customFontDataUrl || !state.customFontFamily) {
       app.style.setProperty("--fp-font-family", "Arial, sans-serif");
-      el.fontStatus.textContent = "Using default font.";
+      if (el.fontStatus) el.fontStatus.textContent = "Using default font.";
       return;
     }
-
-    const format = getFontFormatFromName(fileName);
-
+    const fmt = getFontFormatFromName(fileName);
     const style = document.createElement("style");
     style.id = "fp-custom-font-style";
     style.textContent =
-      '@font-face{' +
-        'font-family:"' + state.customFontFamily + '";' +
-        'src:url("' + String(state.customFontDataUrl).replace(/"/g, '\\"') + '") format("' + format + '");' +
-        'font-weight:normal;' +
-        'font-style:normal;' +
-        'font-display:swap;' +
-      '}' +
-      '#fp-game,' +
-      '#fp-game *,' +
-      '#fp-game button,' +
-      '#fp-game input,' +
-      '#fp-game select,' +
-      '#fp-game textarea{' +
-        'font-family:"' + state.customFontFamily + '", Arial, sans-serif !important;' +
-      '}';
-
+      '@font-face{font-family:"' + state.customFontFamily + '";src:url("' +
+      String(state.customFontDataUrl).replace(/"/g,'\\"') + '") format("' + fmt + '");' +
+      'font-weight:normal;font-style:normal;font-display:swap;}' +
+      '#fp-game,#fp-game *,#fp-game button,#fp-game input,#fp-game select,#fp-game textarea{' +
+      'font-family:"' + state.customFontFamily + '",Arial,sans-serif !important;}';
     document.head.appendChild(style);
-    app.style.setProperty("--fp-font-family", '"' + state.customFontFamily + '", Arial, sans-serif');
-    el.fontStatus.textContent = "Custom font loaded: " + (fileName || "Uploaded font");
+    app.style.setProperty("--fp-font-family", '"' + state.customFontFamily + '",Arial,sans-serif');
+    if (el.fontStatus) el.fontStatus.textContent = "Custom font loaded: " + (fileName || "Uploaded font");
   }
 
   function applyHeaderLogoLayout() {
-    const height = Math.max(24, Math.min(220, state.headerLogoHeight || 56));
-    const maxWidth = Math.max(80, Math.min(500, state.headerLogoMaxWidth || 240));
-    const offset = Math.max(0, Math.min(500, state.headerLogoOffsetY || 200));
-
-    state.headerLogoHeight = height;
-    state.headerLogoMaxWidth = maxWidth;
-    state.headerLogoOffsetY = offset;
-
-    app.style.setProperty("--fp-header-logo-height", height + "px");
-    app.style.setProperty("--fp-header-logo-max-width", maxWidth + "px");
-    app.style.setProperty("--fp-header-logo-offset-y", (-offset) + "px");
+    const h = Math.max(24, Math.min(220, state.headerLogoHeight || 56));
+    const mw = Math.max(80, Math.min(500, state.headerLogoMaxWidth || 240));
+    const off = Math.max(0, Math.min(500, state.headerLogoOffsetY || 200));
+    state.headerLogoHeight = h;
+    state.headerLogoMaxWidth = mw;
+    state.headerLogoOffsetY = off;
+    app.style.setProperty("--fp-header-logo-height", h + "px");
+    app.style.setProperty("--fp-header-logo-max-width", mw + "px");
+    app.style.setProperty("--fp-header-logo-offset-y", (-off) + "px");
   }
 
   function applyHudOffset() {
-    const offset = Math.max(-500, Math.min(500, state.hudOffsetY || 0));
-    state.hudOffsetY = offset;
-    app.style.setProperty("--fp-hud-offset-y", offset + "px");
+    const off = Math.max(-500, Math.min(500, state.hudOffsetY || 0));
+    state.hudOffsetY = off;
+    app.style.setProperty("--fp-hud-offset-y", off + "px");
   }
 
   function applyBoardOffset() {
-  const offset = Math.max(-500, Math.min(500, state.boardOffsetY || 0));
-  state.boardOffsetY = offset;
-
-  app.style.setProperty("--fp-board-offset-y", offset + "px");
-
-  if (el.boardShell) {
-    el.boardShell.style.transform = "";
-    el.boardShell.style.marginTop = offset + "px";
+    const off = Math.max(-500, Math.min(500, state.boardOffsetY || 0));
+    state.boardOffsetY = off;
+    app.style.setProperty("--fp-board-offset-y", off + "px");
+    if (el.boardShell) {
+      el.boardShell.style.transform = "";
+      el.boardShell.style.marginTop = off + "px";
+    }
   }
-}
 
   function applyBoardAreaSizing() {
-  state.boardWidthPercent = Math.max(60, Math.min(100, state.boardWidthPercent || 100));
-  state.boardMinHeight = Math.max(0, Math.min(1400, state.boardMinHeight || 0));
-  state.boardGap = Math.max(6, Math.min(30, state.boardGap || 16));
-
-  app.style.setProperty("--fp-board-width", state.boardWidthPercent + "%");
-  app.style.setProperty("--fp-board-max-width", "none");
-  app.style.setProperty("--fp-board-min-height", state.boardMinHeight + "px");
-  app.style.setProperty("--fp-board-gap", state.boardGap + "px");
-
-  if (el.boardShell) {
-    el.boardShell.style.width = state.boardWidthPercent + "%";
-    el.boardShell.style.maxWidth = "none";
-    el.boardShell.style.minHeight = state.boardMinHeight + "px";
-    el.boardShell.style.height = state.boardMinHeight > 0 ? state.boardMinHeight + "px" : "";
+    state.boardWidthPercent = Math.max(60, Math.min(100, state.boardWidthPercent || 100));
+    state.boardMinHeight   = Math.max(0, Math.min(1400, state.boardMinHeight || 0));
+    state.boardGap         = Math.max(6, Math.min(30, state.boardGap || 16));
+    app.style.setProperty("--fp-board-width", state.boardWidthPercent + "%");
+    app.style.setProperty("--fp-board-max-width", "none");
+    app.style.setProperty("--fp-board-min-height", state.boardMinHeight + "px");
+    app.style.setProperty("--fp-board-gap", state.boardGap + "px");
+    if (el.boardShell) {
+      el.boardShell.style.width = state.boardWidthPercent + "%";
+      el.boardShell.style.maxWidth = "none";
+      el.boardShell.style.minHeight = state.boardMinHeight + "px";
+      el.boardShell.style.height = state.boardMinHeight > 0 ? state.boardMinHeight + "px" : "";
+    }
+    if (el.board) {
+      el.board.style.gap = state.boardGap + "px";
+      el.board.style.width = "100%";
+      el.board.style.height = state.boardMinHeight > 0 ? "100%" : "";
+    }
   }
 
-  if (el.board) {
-    el.board.style.gap = state.boardGap + "px";
-    el.board.style.width = "100%";
-    el.board.style.height = state.boardMinHeight > 0 ? "100%" : "";
-  }
-}
-
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Leaderboard
+  // ─────────────────────────────────────────────────────────────────────────────
   function getScores() {
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.leaderboard) || "[]");
   }
@@ -1031,77 +944,44 @@ document.addEventListener("contextmenu", function(e){
   function formatLeaderboardEntry(entry, index, live) {
     const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : "";
     const cls = live && index === 0 ? ' class="fp-live-score gold"' : live ? ' class="fp-live-score"' : "";
-
     if (entry.mode === "survival") {
-      const roundText = "R" + entry.r;
-      const line = medal
-        ? medal + " " + entry.n + " " + roundText + " " + entry.t.toFixed(2) + "s"
-        : entry.n + " " + roundText + " " + entry.t.toFixed(2) + "s";
-      return live
-        ? '<div' + cls + '>' + line + "</div>"
-        : "<div>" + (index + 1) + ". " + entry.n + " – " + roundText + " – " + entry.t.toFixed(2) + "s</div>";
+      const rt = "R" + entry.r;
+      const line = medal ? medal+" "+entry.n+" "+rt+" "+entry.t.toFixed(2)+"s" : entry.n+" "+rt+" "+entry.t.toFixed(2)+"s";
+      return live ? '<div'+cls+'>'+line+"</div>" : "<div>"+(index+1)+". "+entry.n+" – "+rt+" – "+entry.t.toFixed(2)+"s</div>";
     }
-
-    const goalLine = medal
-      ? medal + " " + entry.n + " " + entry.t.toFixed(2) + "s"
-      : entry.n + " " + entry.t.toFixed(2) + "s";
-    return live
-      ? '<div' + cls + '>' + goalLine + "</div>"
-      : "<div>" + (index + 1) + ". " + entry.n + " – " + entry.t.toFixed(2) + "s</div>";
+    const gl = medal ? medal+" "+entry.n+" "+entry.t.toFixed(2)+"s" : entry.n+" "+entry.t.toFixed(2)+"s";
+    return live ? '<div'+cls+'>'+gl+"</div>" : "<div>"+(index+1)+". "+entry.n+" – "+entry.t.toFixed(2)+"s</div>";
   }
 
   function sortLeaderboardEntries(entries) {
-    return entries.sort(function (a, b) {
-      if (a.mode === "survival" || b.mode === "survival") {
-        const ar = Number(a.r || 0);
-        const br = Number(b.r || 0);
-        if (br !== ar) return br - ar;
-        return Number(a.t || 999999) - Number(b.t || 999999);
+    return entries.sort(function(a,b){
+      if (a.mode==="survival"||b.mode==="survival") {
+        const ar=Number(a.r||0), br=Number(b.r||0);
+        if (br!==ar) return br-ar;
+        return Number(a.t||999999)-Number(b.t||999999);
       }
-      return Number(a.t || 999999) - Number(b.t || 999999);
+      return Number(a.t||999999)-Number(b.t||999999);
     });
   }
 
   function getCurrentModeScores() {
-    const all = getScores();
     return sortLeaderboardEntries(
-      all.filter(function (entry) {
-        return entry.category === getCurrentLeaderboardCategory();
-      })
-    ).slice(0, 5);
+      getScores().filter(function(e){ return e.category===getCurrentLeaderboardCategory(); })
+    ).slice(0,5);
   }
 
   function renderLiveLeaderboard() {
     const scores = getCurrentModeScores();
-    if (!scores.length) {
-      el.liveLeaderboard.innerHTML = "";
-      return;
-    }
-
-    const top = scores.slice(0, 3);
-    let html = "";
-
-    top.forEach(function (item, index) {
-      html += formatLeaderboardEntry(item, index, true);
-    });
-
-    el.liveLeaderboard.innerHTML = html;
+    if (!scores.length) { el.liveLeaderboard.innerHTML=""; return; }
+    el.liveLeaderboard.innerHTML = scores.slice(0,3).map(function(item,i){ return formatLeaderboardEntry(item,i,true); }).join("");
   }
 
   function renderLeaderboard() {
     const scores = getCurrentModeScores();
     renderLiveLeaderboard();
-
-    if (!scores.length) {
-      el.leaderboard.innerHTML = "";
-      return;
-    }
-
-    let html = "<h3>" + getCurrentLeaderboardHeading() + "</h3>";
-    scores.forEach(function (item, index) {
-      html += formatLeaderboardEntry(item, index, false);
-    });
-    el.leaderboard.innerHTML = html;
+    if (!scores.length) { el.leaderboard.innerHTML=""; return; }
+    el.leaderboard.innerHTML = "<h3>"+getCurrentLeaderboardHeading()+"</h3>" +
+      scores.map(function(item,i){ return formatLeaderboardEntry(item,i,false); }).join("");
   }
 
   function flashFirstPlaceBanner(text) {
@@ -1112,44 +992,23 @@ document.addEventListener("contextmenu", function(e){
   }
 
   function saveScore(payload) {
-    const allScores = getScores();
-    const category = payload.category;
-    const relevantOld = sortLeaderboardEntries(
-      allScores.filter(function (entry) { return entry.category === category; })
-    );
-    const oldFirst = relevantOld.length ? relevantOld[0] : null;
-
-    const untouched = allScores.filter(function (entry) {
-      return entry.category !== category;
-    });
-
-    let merged = relevantOld.slice();
-    merged.push(payload);
-    merged = sortLeaderboardEntries(merged).slice(0, 5);
-
+    const all = getScores();
+    const cat = payload.category;
+    const old = sortLeaderboardEntries(all.filter(function(e){ return e.category===cat; }));
+    const oldFirst = old.length ? old[0] : null;
+    const untouched = all.filter(function(e){ return e.category!==cat; });
+    let merged = sortLeaderboardEntries(old.concat([payload])).slice(0,5);
     localStorage.setItem(STORAGE_KEYS.leaderboard, JSON.stringify(untouched.concat(merged)));
-
-    const newFirst = merged.length ? merged[0] : null;
-    const isNewFirst = !!newFirst && newFirst.n === payload.n;
-
     renderLeaderboard();
-
-    if (isNewFirst) {
-      if (payload.mode === "survival") {
-        const oldRound = oldFirst ? Number(oldFirst.r || 0) : -1;
-        const better =
-          !oldFirst ||
-          Number(payload.r || 0) > oldRound ||
-          (Number(payload.r || 0) === oldRound && Number(payload.t || 999999) < Number(oldFirst.t || 999999));
-
-        if (better) {
-          flashFirstPlaceBanner("New 1st Place! " + payload.n + " – R" + payload.r + " – " + payload.t.toFixed(2) + "s");
-        }
+    const newFirst = merged.length ? merged[0] : null;
+    if (newFirst && newFirst.n===payload.n) {
+      if (payload.mode==="survival") {
+        const or = oldFirst ? Number(oldFirst.r||0) : -1;
+        if (!oldFirst || Number(payload.r||0)>or || (Number(payload.r||0)===or && Number(payload.t||999999)<Number(oldFirst.t||999999)))
+          flashFirstPlaceBanner("New 1st Place! "+payload.n+" – R"+payload.r+" – "+payload.t.toFixed(2)+"s");
       } else {
-        const betterGoal = !oldFirst || Number(payload.t || 999999) < Number(oldFirst.t || 999999);
-        if (betterGoal) {
-          flashFirstPlaceBanner("New 1st Place! " + payload.n + " – " + payload.t.toFixed(2) + "s");
-        }
+        if (!oldFirst || Number(payload.t||999999)<Number(oldFirst.t||999999))
+          flashFirstPlaceBanner("New 1st Place! "+payload.n+" – "+payload.t.toFixed(2)+"s");
       }
     }
   }
@@ -1159,77 +1018,53 @@ document.addEventListener("contextmenu", function(e){
     renderLeaderboard();
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Color utilities
+  // ─────────────────────────────────────────────────────────────────────────────
   function hexToRgb(hex) {
-    const clean = hex.replace("#", "").trim();
-    const normalized = clean.length === 3
-      ? clean.split("").map(function (c) { return c + c; }).join("")
-      : clean;
-    const intVal = parseInt(normalized, 16);
-    return {
-      r: (intVal >> 16) & 255,
-      g: (intVal >> 8) & 255,
-      b: intVal & 255
-    };
+    const clean = hex.replace("#","").trim();
+    const n = clean.length===3 ? clean.split("").map(function(c){return c+c;}).join("") : clean;
+    const iv = parseInt(n,16);
+    return { r:(iv>>16)&255, g:(iv>>8)&255, b:iv&255 };
   }
 
-  function hexToRgba(hex, alpha) {
-    const rgb = hexToRgb(hex);
-    return "rgba(" + rgb.r + "," + rgb.g + "," + rgb.b + "," + alpha + ")";
+  function hexToRgba(hex,alpha) {
+    const {r,g,b} = hexToRgb(hex);
+    return "rgba("+r+","+g+","+b+","+alpha+")";
   }
 
-  function isValidHex(value) {
-    return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test((value || "").trim());
+  function isValidHex(v) { return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test((v||"").trim()); }
+
+  function normalizeHex(v, fallback) {
+    const t = (v||"").trim();
+    if (!isValidHex(t)) return fallback;
+    if (t.length===4) return ("#"+t[1]+t[1]+t[2]+t[2]+t[3]+t[3]).toUpperCase();
+    return t.toUpperCase();
   }
 
-  function normalizeHex(value, fallback) {
-    const trimmed = (value || "").trim();
-    if (!isValidHex(trimmed)) return fallback;
-    if (trimmed.length === 4) {
-      return (
-        "#" +
-        trimmed[1] + trimmed[1] +
-        trimmed[2] + trimmed[2] +
-        trimmed[3] + trimmed[3]
-      ).toUpperCase();
-    }
-    return trimmed.toUpperCase();
-  }
+  function escapeForCssUrl(v) { return String(v).replace(/"/g,'\\"'); }
 
-  function escapeForCssUrl(value) {
-    return String(value).replace(/"/g, '\\"');
-  }
-
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Settings persist / load
+  // ─────────────────────────────────────────────────────────────────────────────
   function buildSettingsPayload() {
     return {
       version: 1,
       exportedAt: new Date().toISOString(),
       settings: {
-        winTarget: state.winTarget,
-        startCountdown: state.startCountdown,
-        roundTime: state.roundTime,
-        idleRefreshSeconds: state.idleRefreshSeconds,
-        cardCount: state.cardCount,
-        columns: state.columns,
-        boardWidthPercent: state.boardWidthPercent,
-        boardMinHeight: state.boardMinHeight,
-        boardGap: state.boardGap,
-        idlePreview: state.idlePreview,
-        startPreview: state.startPreview,
-        adminPin: state.adminPin,
-        showCursor: state.showCursor,
-        hudOffsetY: state.hudOffsetY,
-        boardOffsetY: state.boardOffsetY,
-        rounds: state.rounds,
-        roundDifficulty: state.roundDifficulty,
-        theme: state.theme,
-        logoUrl: state.logoUrl,
-        headerLogoUrl: state.headerLogoUrl,
-        headerLogoHeight: state.headerLogoHeight,
-        headerLogoMaxWidth: state.headerLogoMaxWidth,
-        headerLogoOffsetY: state.headerLogoOffsetY,
-        bgImageUrl: state.bgImageUrl,
-        customFontDataUrl: state.customFontDataUrl,
-        customFontFileName: state.customFontFileName
+        winTarget: state.winTarget, startCountdown: state.startCountdown,
+        roundTime: state.roundTime, idleRefreshSeconds: state.idleRefreshSeconds,
+        cardCount: state.cardCount, columns: state.columns,
+        boardWidthPercent: state.boardWidthPercent, boardMinHeight: state.boardMinHeight,
+        boardGap: state.boardGap, idlePreview: state.idlePreview,
+        startPreview: state.startPreview, adminPin: state.adminPin,
+        showCursor: state.showCursor, hudOffsetY: state.hudOffsetY,
+        boardOffsetY: state.boardOffsetY, rounds: state.rounds,
+        roundDifficulty: state.roundDifficulty, theme: state.theme,
+        logoUrl: state.logoUrl, headerLogoUrl: state.headerLogoUrl,
+        headerLogoHeight: state.headerLogoHeight, headerLogoMaxWidth: state.headerLogoMaxWidth,
+        headerLogoOffsetY: state.headerLogoOffsetY, bgImageUrl: state.bgImageUrl,
+        customFontDataUrl: state.customFontDataUrl, customFontFileName: state.customFontFileName
       }
     };
   }
@@ -1239,79 +1074,26 @@ document.addEventListener("contextmenu", function(e){
   }
 
   function applySettingsObject(saved) {
-    if (!saved || typeof saved !== "object") return;
-
-    if (saved.winTarget === "all" || [1, 2, 3, 4].indexOf(saved.winTarget) > -1) {
-      state.winTarget = saved.winTarget;
-    }
-    if (typeof saved.startCountdown === "number") {
-      state.startCountdown = Math.max(0, Math.min(10, saved.startCountdown));
-    }
-    if (typeof saved.roundTime === "number") {
-      state.roundTime = Math.max(5, Math.min(120, saved.roundTime));
-    }
-    if (typeof saved.idleRefreshSeconds === "number") {
-      state.idleRefreshSeconds = Math.max(0, Math.min(600, saved.idleRefreshSeconds));
-    }
-    if (CARD_COUNTS.indexOf(saved.cardCount) > -1) {
-      state.cardCount = saved.cardCount;
-    }
-    if (COLUMN_OPTIONS.indexOf(saved.columns) > -1) {
-      state.columns = saved.columns;
-    } else {
-      state.columns = DEFAULTS.columns;
-    }
-
-    if (typeof saved.boardWidthPercent === "number") {
-      state.boardWidthPercent = Math.max(60, Math.min(100, saved.boardWidthPercent));
-    } else {
-      state.boardWidthPercent = DEFAULTS.boardWidthPercent;
-    }
-
-    if (typeof saved.boardMinHeight === "number") {
-      state.boardMinHeight = Math.max(0, Math.min(1400, saved.boardMinHeight));
-    } else {
-      state.boardMinHeight = DEFAULTS.boardMinHeight;
-    }
-
-    if (typeof saved.boardGap === "number") {
-      state.boardGap = Math.max(6, Math.min(30, saved.boardGap));
-    } else {
-      state.boardGap = DEFAULTS.boardGap;
-    }
-
-    if (typeof saved.idlePreview === "boolean") state.idlePreview = saved.idlePreview;
-    if (typeof saved.startPreview === "boolean") state.startPreview = saved.startPreview;
-    if (typeof saved.showCursor === "boolean") state.showCursor = saved.showCursor;
-    if (typeof saved.adminPin === "string" && saved.adminPin.trim()) state.adminPin = saved.adminPin.trim();
-
-    if (typeof saved.hudOffsetY === "number") {
-      state.hudOffsetY = Math.max(-500, Math.min(500, saved.hudOffsetY));
-    } else {
-      state.hudOffsetY = 0;
-    }
-
-    if (typeof saved.boardOffsetY === "number") {
-      state.boardOffsetY = Math.max(-500, Math.min(500, saved.boardOffsetY));
-    } else if (typeof saved.topOffsetY === "number") {
-      state.boardOffsetY = Math.max(-500, Math.min(500, saved.topOffsetY));
-    } else {
-      state.boardOffsetY = 0;
-    }
-
-    if (saved.rounds === "endless" || [1, 2, 3, 5].indexOf(saved.rounds) > -1) {
-      state.rounds = saved.rounds;
-    } else {
-      state.rounds = DEFAULTS.rounds;
-    }
-
-    if (ROUND_DIFFICULTIES.indexOf(saved.roundDifficulty) > -1) {
-      state.roundDifficulty = saved.roundDifficulty;
-    } else {
-      state.roundDifficulty = DEFAULTS.roundDifficulty;
-    }
-
-    if (saved.theme && typeof saved.theme === "object") {
+    if (!saved || typeof saved!=="object") return;
+    if (saved.winTarget==="all"||[1,2,3,4].indexOf(saved.winTarget)>-1) state.winTarget=saved.winTarget;
+    if (typeof saved.startCountdown==="number") state.startCountdown=Math.max(0,Math.min(10,saved.startCountdown));
+    if (typeof saved.roundTime==="number") state.roundTime=Math.max(5,Math.min(120,saved.roundTime));
+    if (typeof saved.idleRefreshSeconds==="number") state.idleRefreshSeconds=Math.max(0,Math.min(600,saved.idleRefreshSeconds));
+    if (CARD_COUNTS.indexOf(saved.cardCount)>-1) state.cardCount=saved.cardCount;
+    state.columns = COLUMN_OPTIONS.indexOf(saved.columns)>-1 ? saved.columns : DEFAULTS.columns;
+    state.boardWidthPercent = typeof saved.boardWidthPercent==="number" ? Math.max(60,Math.min(100,saved.boardWidthPercent)) : DEFAULTS.boardWidthPercent;
+    state.boardMinHeight = typeof saved.boardMinHeight==="number" ? Math.max(0,Math.min(1400,saved.boardMinHeight)) : DEFAULTS.boardMinHeight;
+    state.boardGap = typeof saved.boardGap==="number" ? Math.max(6,Math.min(30,saved.boardGap)) : DEFAULTS.boardGap;
+    if (typeof saved.idlePreview==="boolean") state.idlePreview=saved.idlePreview;
+    if (typeof saved.startPreview==="boolean") state.startPreview=saved.startPreview;
+    if (typeof saved.showCursor==="boolean") state.showCursor=saved.showCursor;
+    if (typeof saved.adminPin==="string"&&saved.adminPin.trim()) state.adminPin=saved.adminPin.trim();
+    state.hudOffsetY = typeof saved.hudOffsetY==="number" ? Math.max(-500,Math.min(500,saved.hudOffsetY)) : 0;
+    state.boardOffsetY = typeof saved.boardOffsetY==="number" ? Math.max(-500,Math.min(500,saved.boardOffsetY))
+      : typeof saved.topOffsetY==="number" ? Math.max(-500,Math.min(500,saved.topOffsetY)) : 0;
+    state.rounds = (saved.rounds==="endless"||[1,2,3,5].indexOf(saved.rounds)>-1) ? saved.rounds : DEFAULTS.rounds;
+    state.roundDifficulty = ROUND_DIFFICULTIES.indexOf(saved.roundDifficulty)>-1 ? saved.roundDifficulty : DEFAULTS.roundDifficulty;
+    if (saved.theme&&typeof saved.theme==="object") {
       state.theme = {
         bg: normalizeHex(saved.theme.bg, DEFAULTS.theme.bg),
         accent: normalizeHex(saved.theme.accent, DEFAULTS.theme.accent),
@@ -1320,115 +1102,50 @@ document.addEventListener("contextmenu", function(e){
         panel: normalizeHex(saved.theme.panel, DEFAULTS.theme.panel)
       };
     }
-
-    if (typeof saved.logoUrl === "string" && saved.logoUrl.trim()) {
-      state.logoUrl = saved.logoUrl;
-    } else {
-      state.logoUrl = DEFAULTS.logoUrl;
-    }
-
-    if (typeof saved.headerLogoUrl === "string" && saved.headerLogoUrl.trim()) {
-      state.headerLogoUrl = saved.headerLogoUrl;
-    } else {
-      state.headerLogoUrl = DEFAULTS.headerLogoUrl;
-    }
-
-    if (typeof saved.headerLogoHeight === "number") {
-      state.headerLogoHeight = Math.max(24, Math.min(220, saved.headerLogoHeight));
-    } else {
-      state.headerLogoHeight = DEFAULTS.headerLogoHeight;
-    }
-
-    if (typeof saved.headerLogoMaxWidth === "number") {
-      state.headerLogoMaxWidth = Math.max(80, Math.min(500, saved.headerLogoMaxWidth));
-    } else {
-      state.headerLogoMaxWidth = DEFAULTS.headerLogoMaxWidth;
-    }
-
-    if (typeof saved.headerLogoOffsetY === "number") {
-      state.headerLogoOffsetY = Math.max(0, Math.min(500, saved.headerLogoOffsetY));
-    } else {
-      state.headerLogoOffsetY = DEFAULTS.headerLogoOffsetY;
-    }
-
-    if (typeof saved.bgImageUrl === "string") {
-      state.bgImageUrl = saved.bgImageUrl;
-    } else {
-      state.bgImageUrl = DEFAULTS.bgImageUrl;
-    }
-
-    if (typeof saved.customFontDataUrl === "string") {
-      state.customFontDataUrl = saved.customFontDataUrl;
-    } else {
-      state.customFontDataUrl = "";
-    }
-
-    if (typeof saved.customFontFileName === "string") {
-      state.customFontFileName = saved.customFontFileName;
-    } else {
-      state.customFontFileName = "";
-    }
-
+    state.logoUrl = (typeof saved.logoUrl==="string"&&saved.logoUrl.trim()) ? saved.logoUrl : DEFAULTS.logoUrl;
+    state.headerLogoUrl = (typeof saved.headerLogoUrl==="string"&&saved.headerLogoUrl.trim()) ? saved.headerLogoUrl : DEFAULTS.headerLogoUrl;
+    state.headerLogoHeight = typeof saved.headerLogoHeight==="number" ? Math.max(24,Math.min(220,saved.headerLogoHeight)) : DEFAULTS.headerLogoHeight;
+    state.headerLogoMaxWidth = typeof saved.headerLogoMaxWidth==="number" ? Math.max(80,Math.min(500,saved.headerLogoMaxWidth)) : DEFAULTS.headerLogoMaxWidth;
+    state.headerLogoOffsetY = typeof saved.headerLogoOffsetY==="number" ? Math.max(0,Math.min(500,saved.headerLogoOffsetY)) : DEFAULTS.headerLogoOffsetY;
+    state.bgImageUrl = typeof saved.bgImageUrl==="string" ? saved.bgImageUrl : DEFAULTS.bgImageUrl;
+    state.customFontDataUrl = typeof saved.customFontDataUrl==="string" ? saved.customFontDataUrl : "";
+    state.customFontFileName = typeof saved.customFontFileName==="string" ? saved.customFontFileName : "";
     state.customFontFamily = "";
   }
 
   function loadSettings() {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.settings) || "null");
-    if (!saved) return;
-    applySettingsObject(saved);
+    if (saved) applySettingsObject(saved);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Apply logo / bg / theme
+  // ─────────────────────────────────────────────────────────────────────────────
   function applyLogo(url) {
     state.logoUrl = url || DEFAULTS.logoUrl;
-    app.style.setProperty("--fp-logo-url", 'url("' + escapeForCssUrl(state.logoUrl) + '")');
-    el.logoStatus.textContent = state.logoUrl === DEFAULTS.logoUrl
-      ? "Using default card-back logo."
-      : "Custom card-back logo loaded and saved.";
+    app.style.setProperty("--fp-logo-url", 'url("'+escapeForCssUrl(state.logoUrl)+'")');
+    el.logoStatus.textContent = state.logoUrl===DEFAULTS.logoUrl ? "Using default card-back logo." : "Custom card-back logo loaded and saved.";
   }
 
   function applyHeaderLogo(url) {
     state.headerLogoUrl = url || DEFAULTS.headerLogoUrl;
-    if (state.headerLogoUrl) {
-      el.headerLogo.src = state.headerLogoUrl;
-      el.headerLogoWrap.classList.remove("hidden");
-      el.headerLogoStatus.textContent =
-        state.headerLogoUrl === DEFAULTS.headerLogoUrl
-          ? "Using default header logo."
-          : "Custom header logo loaded and saved.";
-    } else {
-      el.headerLogo.src = DEFAULTS.headerLogoUrl;
-      el.headerLogoWrap.classList.remove("hidden");
-      el.headerLogoStatus.textContent = "Using default header logo.";
-      state.headerLogoUrl = DEFAULTS.headerLogoUrl;
-    }
+    el.headerLogo.src = state.headerLogoUrl || DEFAULTS.headerLogoUrl;
+    el.headerLogoWrap.classList.remove("hidden");
+    el.headerLogoStatus.textContent = state.headerLogoUrl===DEFAULTS.headerLogoUrl ? "Using default header logo." : "Custom header logo loaded and saved.";
+    if (!state.headerLogoUrl) { state.headerLogoUrl = DEFAULTS.headerLogoUrl; }
   }
 
   function applyBackgroundImage(url) {
     state.bgImageUrl = url || "";
-    if (state.bgImageUrl) {
-      app.style.setProperty("--fp-bg-image", 'url("' + escapeForCssUrl(state.bgImageUrl) + '")');
-      el.bgStatus.textContent = "Custom background image loaded and saved.";
-    } else {
-      app.style.setProperty("--fp-bg-image", "none");
-      el.bgStatus.textContent = "Using color background only.";
-    }
+    app.style.setProperty("--fp-bg-image", state.bgImageUrl ? 'url("'+escapeForCssUrl(state.bgImageUrl)+'")' : "none");
+    el.bgStatus.textContent = state.bgImageUrl ? "Custom background image loaded and saved." : "Using color background only.";
   }
 
   function applyThemeColors(colors) {
-    const bg = normalizeHex(colors.bg, DEFAULTS.theme.bg);
-    const accent = normalizeHex(colors.accent, DEFAULTS.theme.accent);
-    const accentText = normalizeHex(colors.accentText, DEFAULTS.theme.accentText);
-    const card = normalizeHex(colors.card, DEFAULTS.theme.card);
-    const panel = normalizeHex(colors.panel, DEFAULTS.theme.panel);
-
-    state.theme = {
-      bg: bg,
-      accent: accent,
-      accentText: accentText,
-      card: card,
-      panel: panel
-    };
-
+    const bg=normalizeHex(colors.bg,DEFAULTS.theme.bg), accent=normalizeHex(colors.accent,DEFAULTS.theme.accent),
+      accentText=normalizeHex(colors.accentText,DEFAULTS.theme.accentText),
+      card=normalizeHex(colors.card,DEFAULTS.theme.card), panel=normalizeHex(colors.panel,DEFAULTS.theme.panel);
+    state.theme = { bg, accent, accentText, card, panel };
     app.style.setProperty("--fp-bg", bg);
     app.style.setProperty("--fp-text", "#FFFFFF");
     app.style.setProperty("--fp-panel", hexToRgba(panel, 0.88));
@@ -1446,139 +1163,82 @@ document.addEventListener("contextmenu", function(e){
     app.style.setProperty("--fp-accent-text", accentText);
     app.style.setProperty("--fp-match-ring", hexToRgba(accent, 0.95));
     app.style.setProperty("--fp-match-glow", hexToRgba(accent, 0.45));
-
     syncColorInputsFromTheme();
     persistSettings();
   }
 
   function applyThemePreset(name) {
-    if (name === "dark") {
-      applyThemeColors({
-        bg: "#0F1115",
-        accent: "#FFFFFF",
-        accentText: "#111111",
-        card: "#151821",
-        panel: "#1C1F27"
-      });
-    } else if (name === "purple") {
-      applyThemeColors({
-        bg: "#0D1320",
-        accent: "#6852F4",
-        accentText: "#FFFFFF",
-        card: "#11182B",
-        panel: "#1A2040"
-      });
-    } else if (name === "gold") {
-      applyThemeColors({
-        bg: "#101010",
-        accent: "#D4AF37",
-        accentText: "#111111",
-        card: "#171717",
-        panel: "#23201A"
-      });
-    }
+    if (name==="dark") applyThemeColors({bg:"#0F1115",accent:"#FFFFFF",accentText:"#111111",card:"#151821",panel:"#1C1F27"});
+    else if (name==="purple") applyThemeColors({bg:"#0D1320",accent:"#6852F4",accentText:"#FFFFFF",card:"#11182B",panel:"#1A2040"});
+    else if (name==="gold") applyThemeColors({bg:"#101010",accent:"#D4AF37",accentText:"#111111",card:"#171717",panel:"#23201A"});
   }
 
   function syncColorInputsFromTheme() {
-    el.bgPicker.value = state.theme.bg;
-    el.bgText.value = state.theme.bg;
-    el.accentPicker.value = state.theme.accent;
-    el.accentText.value = state.theme.accent;
-    el.accentTextPicker.value = state.theme.accentText;
-    el.accentTextText.value = state.theme.accentText;
-    el.cardPicker.value = state.theme.card;
-    el.cardText.value = state.theme.card;
-    el.panelPicker.value = state.theme.panel;
-    el.panelText.value = state.theme.panel;
+    el.bgPicker.value=state.theme.bg; el.bgText.value=state.theme.bg;
+    el.accentPicker.value=state.theme.accent; el.accentText.value=state.theme.accent;
+    el.accentTextPicker.value=state.theme.accentText; el.accentTextText.value=state.theme.accentText;
+    el.cardPicker.value=state.theme.card; el.cardText.value=state.theme.card;
+    el.panelPicker.value=state.theme.panel; el.panelText.value=state.theme.panel;
   }
 
   function applyCursorMode() {
     app.classList.toggle("fp-show-cursor", !!state.showCursor);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // UI update helpers
+  // ─────────────────────────────────────────────────────────────────────────────
   function updateRoundPill() {
-    if (!isSurvivalMode()) {
-      el.roundPill.classList.add("hidden");
-      el.roundPill.textContent = "";
-      return;
-    }
-
-    const total = state.rounds === "endless" ? "∞" : state.rounds;
+    if (!isSurvivalMode()) { el.roundPill.classList.add("hidden"); el.roundPill.textContent=""; return; }
+    const total = state.rounds==="endless" ? "∞" : state.rounds;
     const deckSize = state.activeCardCount || state.cardCount;
-    const targetLabel = getWinTargetLabelFor(deckSize, state.currentRound).replace(" Matches", "").replace(" Match", "");
-    el.roundPill.textContent = "ROUND " + state.currentRound + "/" + total + " • TARGET " + targetLabel;
+    const tl = getWinTargetLabelFor(deckSize,state.currentRound).replace(" Matches","").replace(" Match","");
+    el.roundPill.textContent = "ROUND "+state.currentRound+"/"+total+" • TARGET "+tl;
     el.roundPill.classList.remove("hidden");
   }
 
   function updateSettingsUI() {
-    el.winTargets.forEach(function (btn) {
-      btn.classList.toggle("active", String(state.winTarget) === btn.getAttribute("data-win"));
-    });
-
+    el.winTargets.forEach(function(b){ b.classList.toggle("active", String(state.winTarget)===b.getAttribute("data-win")); });
     setWinTargetDisabledUi(isWinTargetOverridden());
+    el.columnButtons.forEach(function(b){ b.classList.toggle("active", String(state.columns)===b.getAttribute("data-columns")); });
+    el.cardCountButtons.forEach(function(b){ b.classList.toggle("active", String(state.cardCount)===b.getAttribute("data-card-count")); });
+    el.roundButtons.forEach(function(b){ b.classList.toggle("active", String(state.rounds)===b.getAttribute("data-rounds")); });
+    el.difficultyButtons.forEach(function(b){ b.classList.toggle("active", String(state.roundDifficulty)===b.getAttribute("data-difficulty")); });
 
-    el.columnButtons.forEach(function (btn) {
-      btn.classList.toggle("active", String(state.columns) === btn.getAttribute("data-columns"));
-    });
+    el.countdownInput.value=state.startCountdown;
+    el.roundTimerInput.value=state.roundTime;
+    el.idleRefreshInput.value=state.idleRefreshSeconds;
+    el.idlePreviewInput.checked=state.idlePreview;
+    el.startPreviewInput.checked=state.startPreview;
+    el.showCursorInput.checked=state.showCursor;
 
-    el.cardCountButtons.forEach(function (btn) {
-      btn.classList.toggle("active", String(state.cardCount) === btn.getAttribute("data-card-count"));
-    });
+    // Sliders: Header Logo Size
+    if (el.headerLogoSizeInput) el.headerLogoSizeInput.value=state.headerLogoHeight;
+    if (el.headerLogoSizeValue) el.headerLogoSizeValue.textContent=state.headerLogoHeight+"px";
+    // Sliders: Header Logo Offset
+    if (el.headerLogoOffsetInput) el.headerLogoOffsetInput.value=state.headerLogoOffsetY;
+    if (el.headerLogoOffsetValue) el.headerLogoOffsetValue.textContent=state.headerLogoOffsetY+"px";
+    // Sliders: HUD offset
+    if (el.hudOffsetInput) el.hudOffsetInput.value=state.hudOffsetY;
+    if (el.hudOffsetValue) el.hudOffsetValue.textContent=state.hudOffsetY+"px";
+    // Sliders: Board offset
+    if (el.boardOffsetInput) el.boardOffsetInput.value=state.boardOffsetY;
+    if (el.boardOffsetValue) el.boardOffsetValue.textContent=state.boardOffsetY+"px";
 
-    el.roundButtons.forEach(function (btn) {
-      btn.classList.toggle("active", String(state.rounds) === btn.getAttribute("data-rounds"));
-    });
-
-    el.difficultyButtons.forEach(function (btn) {
-      btn.classList.toggle("active", String(state.roundDifficulty) === btn.getAttribute("data-difficulty"));
-    });
-
-    el.countdownInput.value = state.startCountdown;
-    el.roundTimerInput.value = state.roundTime;
-    el.idleRefreshInput.value = state.idleRefreshSeconds;
-    el.idlePreviewInput.checked = state.idlePreview;
-    el.startPreviewInput.checked = state.startPreview;
-    el.showCursorInput.checked = state.showCursor;
-
-    if (el.headerLogoSizeInput) el.headerLogoSizeInput.value = state.headerLogoHeight;
-    if (el.headerLogoOffsetInput) el.headerLogoOffsetInput.value = state.headerLogoOffsetY;
-    if (el.hudOffsetInput) el.hudOffsetInput.value = state.hudOffsetY;
-    if (el.boardOffsetInput) el.boardOffsetInput.value = state.boardOffsetY;
-
-    if (el.boardWidthRange) el.boardWidthRange.value = state.boardWidthPercent;
-    if (el.boardWidthValue) el.boardWidthValue.textContent = state.boardWidthPercent + "%";
-
-    if (el.boardHeightRange) el.boardHeightRange.value = state.boardMinHeight;
-    if (el.boardHeightValue) el.boardHeightValue.textContent = state.boardMinHeight + "px";
-
-    if (el.boardGapRange) el.boardGapRange.value = state.boardGap;
-    if (el.boardGapValue) el.boardGapValue.textContent = state.boardGap + "px";
+    if (el.boardWidthRange) el.boardWidthRange.value=state.boardWidthPercent;
+    if (el.boardWidthValue) el.boardWidthValue.textContent=state.boardWidthPercent+"%";
+    if (el.boardHeightRange) el.boardHeightRange.value=state.boardMinHeight;
+    if (el.boardHeightValue) el.boardHeightValue.textContent=state.boardMinHeight+"px";
+    if (el.boardGapRange) el.boardGapRange.value=state.boardGap;
+    if (el.boardGapValue) el.boardGapValue.textContent=state.boardGap+"px";
 
     syncColorInputsFromTheme();
-
-    el.logoStatus.textContent = state.logoUrl === DEFAULTS.logoUrl
-      ? "Using default card-back logo."
-      : "Custom card-back logo loaded and saved.";
-
-    el.headerLogoStatus.textContent = state.headerLogoUrl === DEFAULTS.headerLogoUrl
-      ? "Using default header logo."
-      : "Custom header logo loaded and saved.";
-
-    el.bgStatus.textContent = state.bgImageUrl
-      ? "Custom background image loaded and saved."
-      : "Using color background only.";
-
-    el.fontStatus.textContent = state.customFontDataUrl
-      ? "Custom font loaded: " + (state.customFontFileName || "Uploaded font")
-      : "Using default font.";
-
+    el.logoStatus.textContent = state.logoUrl===DEFAULTS.logoUrl ? "Using default card-back logo." : "Custom card-back logo loaded and saved.";
+    el.headerLogoStatus.textContent = state.headerLogoUrl===DEFAULTS.headerLogoUrl ? "Using default header logo." : "Custom header logo loaded and saved.";
+    el.bgStatus.textContent = state.bgImageUrl ? "Custom background image loaded and saved." : "Using color background only.";
+    el.fontStatus.textContent = state.customFontDataUrl ? "Custom font loaded: "+(state.customFontFileName||"Uploaded font") : "Using default font.";
     el.settingsTransferStatus.textContent = "Export your settings to move them to another monitor, then import that JSON there.";
-
-    el.currentPin.value = "";
-    el.newPin.value = "";
-    el.confirmPin.value = "";
-    el.pinStatus.textContent = "";
-
+    el.currentPin.value=""; el.newPin.value=""; el.confirmPin.value=""; el.pinStatus.textContent="";
     updateTitleForCurrentTarget();
   }
 
@@ -1586,40 +1246,41 @@ document.addEventListener("contextmenu", function(e){
     el.adminModal.classList.remove("hidden");
     el.adminLock.classList.remove("hidden");
     el.adminUI.classList.add("hidden");
-    el.adminPin.value = "";
+    el.adminPin.value="";
     updateAdminPinUI();
     buildAdminPinKeyboard();
   }
 
   function closeAdmin() {
-    state.adminUnlocked = false;
+    state.adminUnlocked=false;
     el.adminModal.classList.add("hidden");
     el.adminLock.classList.remove("hidden");
     el.adminUI.classList.add("hidden");
-    el.adminPin.value = "";
+    el.adminPin.value="";
     updateAdminPinUI();
+    setSliderActive(false);
   }
 
   function unlockAdmin() {
-    if (el.adminPin.value === state.adminPin) {
-      state.adminUnlocked = true;
+    if (el.adminPin.value===state.adminPin) {
+      state.adminUnlocked=true;
       el.adminLock.classList.add("hidden");
       el.adminUI.classList.remove("hidden");
       updateSettingsUI();
     } else {
-      el.adminPin.value = "";
+      el.adminPin.value="";
       updateAdminPinUI();
-      el.adminPinDisplay.textContent = "INCORRECT PIN";
+      el.adminPinDisplay.textContent="INCORRECT PIN";
       el.adminPinDisplay.classList.add("empty");
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Board layout
+  // ─────────────────────────────────────────────────────────────────────────────
   function getGridForCount(count) {
     const cols = state.columns || DEFAULTS.columns;
-    return {
-      cols: cols,
-      rows: Math.ceil(count / cols)
-    };
+    return { cols, rows: Math.ceil(count/cols) };
   }
 
   function updateBoardShellMode() {
@@ -1628,304 +1289,201 @@ document.addEventListener("contextmenu", function(e){
   }
 
   function applyBoardLayout() {
-  const count = state.deck.length || state.activeCardCount || state.cardCount;
-  const grid = getGridForCount(count);
-  const useFixedHeight = state.boardMinHeight > 0;
-
-  el.board.style.display = "grid";
-  el.board.style.width = "100%";
-  el.board.style.gap = state.boardGap + "px";
-  el.board.style.gridTemplateColumns = "repeat(" + grid.cols + ", minmax(0, 1fr))";
-  el.board.style.gridAutoFlow = "row";
-
-  if (useFixedHeight) {
-    el.board.style.height = "100%";
-    el.board.style.gridTemplateRows = "repeat(" + grid.rows + ", minmax(0, 1fr))";
-    el.board.style.gridAutoRows = "1fr";
-    el.board.style.alignItems = "stretch";
-    el.board.style.alignContent = "stretch";
-  } else {
-    el.board.style.height = "";
-    el.board.style.gridTemplateRows = "none";
-    el.board.style.removeProperty("grid-template-rows");
-    el.board.style.gridAutoRows = "auto";
-    el.board.style.alignItems = "start";
-    el.board.style.alignContent = "start";
+    const count = state.deck.length || state.activeCardCount || state.cardCount;
+    const grid = getGridForCount(count);
+    const fixed = state.boardMinHeight > 0;
+    el.board.style.display="grid";
+    el.board.style.width="100%";
+    el.board.style.gap=state.boardGap+"px";
+    el.board.style.gridTemplateColumns="repeat("+grid.cols+",minmax(0,1fr))";
+    el.board.style.gridAutoFlow="row";
+    if (fixed) {
+      el.board.style.height="100%";
+      el.board.style.gridTemplateRows="repeat("+grid.rows+",minmax(0,1fr))";
+      el.board.style.gridAutoRows="1fr";
+      el.board.style.alignItems="stretch"; el.board.style.alignContent="stretch";
+    } else {
+      el.board.style.height="";
+      el.board.style.gridTemplateRows="none";
+      el.board.style.removeProperty("grid-template-rows");
+      el.board.style.gridAutoRows="auto";
+      el.board.style.alignItems="start"; el.board.style.alignContent="start";
+    }
+    if (el.boardShell) {
+      el.boardShell.style.width=state.boardWidthPercent+"%";
+      el.boardShell.style.maxWidth="none";
+      el.boardShell.style.minHeight=state.boardMinHeight+"px";
+      el.boardShell.style.height=fixed ? state.boardMinHeight+"px" : "";
+    }
+    el.board.setAttribute("data-card-count",String(count));
+    el.board.setAttribute("data-columns",String(grid.cols));
+    app.setAttribute("data-columns",String(grid.cols));
   }
 
-  if (el.boardShell) {
-    el.boardShell.style.width = state.boardWidthPercent + "%";
-    el.boardShell.style.maxWidth = "none";
-    el.boardShell.style.minHeight = state.boardMinHeight + "px";
-    el.boardShell.style.height = state.boardMinHeight > 0 ? state.boardMinHeight + "px" : "";
-  }
-
-  el.board.setAttribute("data-card-count", String(count));
-  el.board.setAttribute("data-columns", String(grid.cols));
-  app.setAttribute("data-columns", String(grid.cols));
-}
-
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Deck building
+  // ─────────────────────────────────────────────────────────────────────────────
   async function buildDeck(cardCountOverride) {
-    const cacheBust = (location.href.indexOf("?") > -1 ? "&" : "?") + "t=" + Date.now();
-    const html = await fetch(location.href + cacheBust, { cache: "no-store" })
-      .then(function (response) { return response.text(); });
-
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    const urls = [
-      ...new Set(
-        [...doc.querySelectorAll("#gallery .grid-item img")].map(function (img) {
-          return img.src;
-        }).filter(Boolean)
-      )
-    ];
-
+    const cb = (location.href.indexOf("?")>-1?"&":"?")+"t="+Date.now();
+    const html = await fetch(location.href+cb,{cache:"no-store"}).then(function(r){return r.text();});
+    const doc = new DOMParser().parseFromString(html,"text/html");
+    const urls = [...new Set([...doc.querySelectorAll("#gallery .grid-item img")].map(function(img){return img.src;}).filter(Boolean))];
     const deckSize = cardCountOverride || state.cardCount;
-    const pairCount = deckSize / 2;
     shuffle(urls);
-    const chosen = urls.slice(0, pairCount);
+    const chosen = urls.slice(0, deckSize/2);
     return shuffle(chosen.concat(chosen));
   }
 
-  function setTimerDisplay(value) {
-    el.timer.textContent = String(value);
-  }
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Timer
+  // ─────────────────────────────────────────────────────────────────────────────
+  function setTimerDisplay(v) { el.timer.textContent=String(v); }
 
   function startRoundTimer() {
-    let remaining = state.activeRoundTime;
+    let remaining=state.activeRoundTime;
     setTimerDisplay(remaining);
     clearInterval(state.roundTimerId);
-
-    state.roundTimerId = setInterval(function () {
-      remaining -= 1;
+    state.roundTimerId=setInterval(function(){
+      remaining-=1;
       setTimerDisplay(remaining);
-
-      if (remaining <= 0) {
-        loseRound();
-      }
-    }, 1000);
+      if (remaining<=0) loseRound();
+    },1000);
   }
 
-  function stopIdleRefreshTimer() {
-    clearInterval(state.idleRefreshTimerId);
-    state.idleRefreshTimerId = 0;
-  }
+  function stopIdleRefreshTimer() { clearInterval(state.idleRefreshTimerId); state.idleRefreshTimerId=0; }
 
   function startIdleRefreshTimer() {
     stopIdleRefreshTimer();
-    if (state.idleRefreshSeconds <= 0) return;
-
-    state.idleRefreshTimerId = setInterval(function () {
+    if (state.idleRefreshSeconds<=0) return;
+    state.idleRefreshTimerId=setInterval(function(){
       if (state.gameActive) return;
       if (!el.adminModal.classList.contains("hidden")) return;
       if (!el.center.classList.contains("hidden")) return;
-
       prepareDeck(true);
-    }, state.idleRefreshSeconds * 1000);
+    },state.idleRefreshSeconds*1000);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Name / keyboard
+  // ─────────────────────────────────────────────────────────────────────────────
   function updateNameUI() {
     el.name.textContent = state.playerName || "ENTER NAME";
-    el.player.textContent = state.playerName ? "Player: " + state.playerName : "";
+    el.player.textContent = state.playerName ? "Player: "+state.playerName : "";
     el.start.disabled = state.playerName.length < 2;
   }
 
   function updateAdminPinUI() {
-    const value = el.adminPin.value || "";
-    if (!value.length) {
-      el.adminPinDisplay.textContent = "ENTER PIN";
-      el.adminPinDisplay.classList.add("empty");
-    } else {
-      el.adminPinDisplay.textContent = "• ".repeat(value.length).trim();
-      el.adminPinDisplay.classList.remove("empty");
-    }
+    const v = el.adminPin.value||"";
+    if (!v.length) { el.adminPinDisplay.textContent="ENTER PIN"; el.adminPinDisplay.classList.add("empty"); }
+    else { el.adminPinDisplay.textContent="• ".repeat(v.length).trim(); el.adminPinDisplay.classList.remove("empty"); }
   }
 
   function pressAdminPinKey(value) {
-    if (value === "CLEAR") {
-      el.adminPin.value = "";
-    } else if (value === "←") {
-      el.adminPin.value = el.adminPin.value.slice(0, -1);
-    } else if (/^\d$/.test(value) && el.adminPin.value.length < 8) {
-      el.adminPin.value += value;
-    }
-
+    if (value==="CLEAR") el.adminPin.value="";
+    else if (value==="←") el.adminPin.value=el.adminPin.value.slice(0,-1);
+    else if (/^\d$/.test(value)&&el.adminPin.value.length<8) el.adminPin.value+=value;
     updateAdminPinUI();
   }
 
   function buildAdminPinKeyboard() {
-    const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "CLEAR", "0", "←"];
-    el.adminPinKeys.innerHTML = "";
-
-    keys.forEach(function (key) {
-      const button = document.createElement("div");
-      button.className = "fp-admin-pin-key";
-      button.textContent = key === "←" ? "⌫" : key;
-      button.onclick = function () {
-        pressAdminPinKey(key);
-      };
-      el.adminPinKeys.appendChild(button);
+    el.adminPinKeys.innerHTML="";
+    ["1","2","3","4","5","6","7","8","9","CLEAR","0","←"].forEach(function(key){
+      const b=document.createElement("div");
+      b.className="fp-admin-pin-key";
+      b.textContent=key==="←"?"⌫":key;
+      b.onclick=function(){ pressAdminPinKey(key); };
+      el.adminPinKeys.appendChild(b);
     });
   }
 
   function pressKey(value) {
-    if (value === "←") {
-      state.playerName = state.playerName.slice(0, -1);
-    } else if (value === "CLEAR") {
-      state.playerName = "";
-    } else if (value === "SPACE") {
-      if (
-        state.playerName.length < 12 &&
-        state.playerName.length &&
-        state.playerName[state.playerName.length - 1] !== " "
-      ) {
-        state.playerName += " ";
-      }
-    } else if (state.playerName.length < 12) {
-      state.playerName += value;
-    }
-
+    if (value==="←") state.playerName=state.playerName.slice(0,-1);
+    else if (value==="CLEAR") state.playerName="";
+    else if (value==="SPACE") {
+      if (state.playerName.length<12 && state.playerName.length && state.playerName[state.playerName.length-1]!==" ")
+        state.playerName+=" ";
+    } else if (state.playerName.length<12) state.playerName+=value;
     updateNameUI();
   }
 
   function buildKeyboard() {
-    const rows = [
-      ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
-      ["A", "S", "D", "F", "G", "H", "J", "K", "L", "←"],
-      ["Z", "X", "C", "V", "B", "N", "M"]
-    ];
-
-    el.keys.innerHTML = "";
-
-    rows.forEach(function (row) {
-      row.forEach(function (key) {
-        const button = document.createElement("div");
-        button.className = "fp-key";
-        button.textContent = key === "←" ? "⌫" : key;
-        button.onclick = function () {
-          pressKey(key);
-        };
-        el.keys.appendChild(button);
+    const rows=[["Q","W","E","R","T","Y","U","I","O","P"],["A","S","D","F","G","H","J","K","L","←"],["Z","X","C","V","B","N","M"]];
+    el.keys.innerHTML="";
+    rows.forEach(function(row){
+      row.forEach(function(key){
+        const b=document.createElement("div");
+        b.className="fp-key";
+        b.textContent=key==="←"?"⌫":key;
+        b.onclick=function(){ pressKey(key); };
+        el.keys.appendChild(b);
       });
     });
-
-    const spaceButton = document.createElement("div");
-    spaceButton.className = "fp-key bottom-key bottom-left";
-    spaceButton.textContent = "SPACE";
-    spaceButton.onclick = function () {
-      pressKey("SPACE");
-    };
-    el.keys.appendChild(spaceButton);
-
-    const clearButton = document.createElement("div");
-    clearButton.className = "fp-key bottom-key bottom-right";
-    clearButton.textContent = "CLEAR";
-    clearButton.onclick = function () {
-      pressKey("CLEAR");
-    };
-    el.keys.appendChild(clearButton);
+    const sp=document.createElement("div"); sp.className="fp-key bottom-key bottom-left"; sp.textContent="SPACE"; sp.onclick=function(){pressKey("SPACE");}; el.keys.appendChild(sp);
+    const cl=document.createElement("div"); cl.className="fp-key bottom-key bottom-right"; cl.textContent="CLEAR"; cl.onclick=function(){pressKey("CLEAR");}; el.keys.appendChild(cl);
   }
 
-  function shouldWinNow() {
-    return state.matchedPairs >= state.activeWinTarget;
-  }
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Game logic
+  // ─────────────────────────────────────────────────────────────────────────────
+  function shouldWinNow() { return state.matchedPairs>=state.activeWinTarget; }
 
   function getMatchedCardKeysFromBoard() {
-    const matchedKeys = [];
-    [...el.board.querySelectorAll(".fp-card.matched")].forEach(function (card) {
-      matchedKeys.push(card.dataset.k);
-    });
-    return matchedKeys;
+    return [...el.board.querySelectorAll(".fp-card.matched")].map(function(c){return c.dataset.k;});
   }
 
   function renderBoard(showAll, preserveMatched) {
     applyBoardLayout();
-
     const matchedKeys = preserveMatched ? getMatchedCardKeysFromBoard() : [];
-    const matchedCounts = {};
+    const matchedCounts={};
+    matchedKeys.forEach(function(k){ matchedCounts[k]=(matchedCounts[k]||0)+1; });
+    el.board.innerHTML="";
 
-    matchedKeys.forEach(function (key) {
-      matchedCounts[key] = (matchedCounts[key] || 0) + 1;
-    });
+    state.deck.forEach(function(src){
+      const card=document.createElement("div");
+      card.className="fp-card"; card.dataset.k=src; card.style.width="100%";
+      if (state.boardMinHeight>0) { card.style.height="100%"; card.style.aspectRatio=""; }
+      else { card.style.height=""; card.style.aspectRatio=getCardAspectRatio(); }
 
-    el.board.innerHTML = "";
+      const stayMatched=preserveMatched&&matchedCounts[src]>0;
+      if (showAll||stayMatched) card.classList.add("show");
+      if (stayMatched) { card.classList.add("matched"); matchedCounts[src]--; }
 
-    state.deck.forEach(function (src) {
-      const card = document.createElement("div");
-      card.className = "fp-card";
-      card.dataset.k = src;
-      card.style.width = "100%";
-
-if (state.boardMinHeight > 0) {
-  card.style.height = "100%";
-  card.style.aspectRatio = "";
-} else {
-  card.style.height = "";
-  card.style.aspectRatio = getCardAspectRatio();
-}
-
-      const shouldStayMatched = preserveMatched && matchedCounts[src] > 0;
-
-      if (showAll || shouldStayMatched) {
-        card.classList.add("show");
-      }
-
-      if (shouldStayMatched) {
-        card.classList.add("matched");
-        matchedCounts[src]--;
-      }
-
-      card.innerHTML =
+      card.innerHTML=
         '<div class="fp-inner">' +
           '<div class="fp-face fp-front"><span>Tap</span></div>' +
-          '<div class="fp-face fp-back"><img src="' + src + '" alt=""></div>' +
+          '<div class="fp-face fp-back"><img src="'+src+'" alt="" draggable="false"></div>' +
         '</div>';
 
       el.board.appendChild(card);
 
-      card.onclick = function () {
+      card.addEventListener("click", function(){
         if (!state.gameActive) return;
         if (!el.center.classList.contains("hidden")) return;
         if (!el.adminModal.classList.contains("hidden")) return;
-        if (state.lockBoard || card.classList.contains("matched") || card === state.firstCard) return;
-
+        if (state.lockBoard||card.classList.contains("matched")||card===state.firstCard) return;
         card.classList.add("show");
-
-        if (!state.firstCard) {
-          state.firstCard = card;
-          return;
-        }
-
-        state.lockBoard = true;
-
-        if (state.firstCard.dataset.k === card.dataset.k) {
-          state.firstCard.classList.add("matched");
-          card.classList.add("matched");
-          state.firstCard = null;
-          state.matchedPairs += 1;
-
-          if (shouldWinNow()) {
-            setTimeout(winRound, 550);
-          } else {
-            state.lockBoard = false;
-          }
+        if (!state.firstCard) { state.firstCard=card; return; }
+        state.lockBoard=true;
+        if (state.firstCard.dataset.k===card.dataset.k) {
+          state.firstCard.classList.add("matched"); card.classList.add("matched");
+          state.firstCard=null; state.matchedPairs+=1;
+          if (shouldWinNow()) setTimeout(winRound,550); else state.lockBoard=false;
         } else {
-          state.misses += 1;
-          const a = state.firstCard;
-          const b = card;
-
-          setTimeout(function () {
-            a.classList.remove("show");
-            b.classList.remove("show");
-            state.firstCard = null;
-
-            if (state.roundDifficulty === "randomReshuffle") {
-              runMissReshufflePreviewFinalState();
-            } else {
-              state.lockBoard = false;
-            }
-          }, 700);
+          state.misses+=1;
+          const a=state.firstCard, b=card;
+          setTimeout(function(){
+            a.classList.remove("show"); b.classList.remove("show"); state.firstCard=null;
+            if (state.roundDifficulty==="randomReshuffle") runMissReshufflePreviewFinalState(); else state.lockBoard=false;
+          },700);
         }
-      };
+      });
+
+      // Block long-press image drag on card images
+      const img = card.querySelector("img");
+      if (img) {
+        img.addEventListener("dragstart", function(e){ e.preventDefault(); });
+        img.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+      }
     });
 
     updateBoardShellMode();
@@ -1933,1058 +1491,557 @@ if (state.boardMinHeight > 0) {
   }
 
   function reshuffleUnmatchedDeck() {
-    const matchedKeys = getMatchedCardKeysFromBoard();
-    const matchedCounts = {};
-
-    matchedKeys.forEach(function (key) {
-      matchedCounts[key] = (matchedCounts[key] || 0) + 1;
+    const mk=getMatchedCardKeysFromBoard(), mc={};
+    mk.forEach(function(k){mc[k]=(mc[k]||0)+1;});
+    const pool=state.deck.slice(), next=[];
+    Object.keys(mc).forEach(function(k){
+      let rem=mc[k];
+      for (let i=pool.length-1;i>=0;i--){ if (!rem) break; if (pool[i]===k){pool.splice(i,1);rem--;} }
     });
-
-    const unmatchedPool = state.deck.slice();
-    const nextDeck = [];
-
-    Object.keys(matchedCounts).forEach(function (key) {
-      let remainingToRemove = matchedCounts[key];
-
-      for (let i = unmatchedPool.length - 1; i >= 0; i--) {
-        if (remainingToRemove <= 0) break;
-        if (unmatchedPool[i] === key) {
-          unmatchedPool.splice(i, 1);
-          remainingToRemove--;
-        }
-      }
-    });
-
-    shuffle(unmatchedPool);
-
-    state.deck.forEach(function (key) {
-      if (matchedCounts[key] > 0) {
-        nextDeck.push(key);
-        matchedCounts[key]--;
-      } else {
-        nextDeck.push(unmatchedPool.shift());
-      }
-    });
-
-    state.deck = nextDeck;
+    shuffle(pool);
+    state.deck.forEach(function(k){ if (mc[k]>0){next.push(k);mc[k]--;} else next.push(pool.shift()); });
+    state.deck=next;
   }
 
   function showStatusFlash(done) {
-    if (!el.statusFlash) {
-      if (typeof done === "function") done();
-      return;
-    }
-
-    el.statusFlash.innerHTML =
-      '<span class="fp-status-line-1">MISS!</span>' +
-      '<span class="fp-status-line-2">RESHUFFLING...</span>';
-
-    el.statusFlash.classList.remove("hidden");
-    el.statusFlash.style.display = "block";
-
-    requestAnimationFrame(function () {
-      el.statusFlash.classList.add("show");
-    });
-
-    setTimeout(function () {
+    if (!el.statusFlash) { if (typeof done==="function") done(); return; }
+    el.statusFlash.innerHTML='<span class="fp-status-line-1">MISS!</span><span class="fp-status-line-2">RESHUFFLING...</span>';
+    el.statusFlash.classList.remove("hidden"); el.statusFlash.style.display="block";
+    requestAnimationFrame(function(){ el.statusFlash.classList.add("show"); });
+    setTimeout(function(){
       el.statusFlash.classList.remove("show");
-
-      setTimeout(function () {
-        el.statusFlash.classList.add("hidden");
-        el.statusFlash.style.display = "none";
-        if (typeof done === "function") done();
-      }, 180);
-    }, 520);
+      setTimeout(function(){ el.statusFlash.classList.add("hidden"); el.statusFlash.style.display="none"; if (typeof done==="function") done(); },180);
+    },520);
   }
 
   function previewFinalStateThenHide(done) {
-    const unmatchedCards = [...el.board.querySelectorAll(".fp-card:not(.matched)")];
-
-    unmatchedCards.forEach(function (card) {
-      card.classList.add("show");
-    });
-
-    setTimeout(function () {
-      unmatchedCards.forEach(function (card) {
-        card.classList.remove("show");
-      });
-
-      setTimeout(function () {
-        if (typeof done === "function") done();
-      }, 120);
-    }, 420);
+    const cards=[...el.board.querySelectorAll(".fp-card:not(.matched)")];
+    cards.forEach(function(c){c.classList.add("show");});
+    setTimeout(function(){
+      cards.forEach(function(c){c.classList.remove("show");});
+      setTimeout(function(){ if (typeof done==="function") done(); },120);
+    },420);
   }
 
   function runMissReshufflePreviewFinalState() {
-    state.lockBoard = true;
-
-    const oldCards = [...el.board.children];
-    const firstRects = oldCards.map(function (card) {
-      return card.getBoundingClientRect();
-    });
-
-    showStatusFlash(function () {
-      reshuffleUnmatchedDeck();
-      renderBoard(false, true);
-
-      const newCards = [...el.board.children];
-      const lastRects = newCards.map(function (card) {
-        return card.getBoundingClientRect();
+    state.lockBoard=true;
+    const old=[...el.board.children];
+    const fr=old.map(function(c){return c.getBoundingClientRect();});
+    showStatusFlash(function(){
+      reshuffleUnmatchedDeck(); renderBoard(false,true);
+      const nw=[...el.board.children];
+      const lr=nw.map(function(c){return c.getBoundingClientRect();});
+      nw.forEach(function(c,i){
+        const o=fr[i],n=lr[i]; if(!o||!n) return;
+        const dx=o.left-n.left, dy=o.top-n.top;
+        c.style.transition="none"; c.style.transform="translate("+dx+"px,"+dy+"px)";
       });
-
-      newCards.forEach(function (card, index) {
-        const oldRect = firstRects[index];
-        const newRect = lastRects[index];
-        if (!oldRect || !newRect) return;
-
-        const dx = oldRect.left - newRect.left;
-        const dy = oldRect.top - newRect.top;
-
-        card.style.transition = "none";
-        card.style.transform = "translate(" + dx + "px," + dy + "px)";
-      });
-
       el.board.classList.add("fp-reshuffle");
-
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () {
-          newCards.forEach(function (card) {
-            card.style.transition = "transform .42s ease";
-            card.style.transform = "translate(0,0)";
-          });
-
-          setTimeout(function () {
-            newCards.forEach(function (card) {
-              card.style.transition = "";
-              card.style.transform = "";
-            });
-
-            el.board.classList.remove("fp-reshuffle");
-
-            previewFinalStateThenHide(function () {
-              state.lockBoard = false;
-            });
-          }, 440);
-        });
-      });
+      requestAnimationFrame(function(){requestAnimationFrame(function(){
+        nw.forEach(function(c){ c.style.transition="transform .42s ease"; c.style.transform="translate(0,0)"; });
+        setTimeout(function(){
+          nw.forEach(function(c){ c.style.transition=""; c.style.transform=""; });
+          el.board.classList.remove("fp-reshuffle");
+          previewFinalStateThenHide(function(){ state.lockBoard=false; });
+        },440);
+      });});
     });
   }
 
   function animateBoardRefresh(nextShowAll) {
     el.board.classList.add("fp-refresh-out");
-
-    setTimeout(function () {
-      renderBoard(nextShowAll, false);
-      el.board.classList.remove("fp-refresh-out");
-      el.board.classList.add("fp-refresh-in");
-
-      setTimeout(function () {
-        el.board.classList.remove("fp-refresh-in");
-      }, 380);
-    }, 220);
+    setTimeout(function(){
+      renderBoard(nextShowAll,false); el.board.classList.remove("fp-refresh-out"); el.board.classList.add("fp-refresh-in");
+      setTimeout(function(){ el.board.classList.remove("fp-refresh-in"); },380);
+    },220);
   }
 
   function rerenderBoardForColumnChange() {
     applyBoardLayout();
-
     if (!state.deck.length) return;
-
-    if (state.gameActive) {
-      renderBoard(false, true);
-      return;
-    }
-
-    renderBoard(state.idlePreview, false);
+    renderBoard(state.gameActive ? false : state.idlePreview, state.gameActive);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Game flow
+  // ─────────────────────────────────────────────────────────────────────────────
   function showNameEntry() {
-    clearTimeout(state.autoBackTimer);
-    stopIdleRefreshTimer();
+    clearTimeout(state.autoBackTimer); stopIdleRefreshTimer();
     updateTitleForCurrentTarget();
-    el.copy.textContent = "Enter your name, then tap start.";
-    el.center.classList.remove("hidden");
-    el.keys.style.display = "";
-    el.name.style.display = "";
-    el.start.classList.remove("hidden");
-    el.cancel.classList.remove("hidden");
-    el.replay.classList.add("hidden");
-    renderLeaderboard();
-    buildKeyboard();
-    updateNameUI();
-    updateBoardShellMode();
+    el.copy.textContent="Enter your name, then tap start.";
+    el.center.classList.remove("hidden"); el.keys.style.display=""; el.name.style.display="";
+    el.start.classList.remove("hidden"); el.cancel.classList.remove("hidden"); el.replay.classList.add("hidden");
+    renderLeaderboard(); buildKeyboard(); updateNameUI(); updateBoardShellMode();
   }
 
-  function showResult(title, text, delayMs) {
+  function showResult(title,text,delayMs) {
     clearTimeout(state.autoBackTimer);
-    el.head.textContent = title;
-    el.copy.textContent = text;
-    el.center.classList.remove("hidden");
-    el.keys.style.display = "none";
-    el.name.style.display = "none";
-    el.start.classList.add("hidden");
-    el.cancel.classList.add("hidden");
-    el.replay.classList.remove("hidden");
-    renderLeaderboard();
-    updateBoardShellMode();
-
-    state.autoBackTimer = setTimeout(function () {
-      goIdle();
-    }, typeof delayMs === "number" ? delayMs : 5000);
+    el.head.textContent=title; el.copy.textContent=text; el.center.classList.remove("hidden");
+    el.keys.style.display="none"; el.name.style.display="none";
+    el.start.classList.add("hidden"); el.cancel.classList.add("hidden"); el.replay.classList.remove("hidden");
+    renderLeaderboard(); updateBoardShellMode();
+    state.autoBackTimer=setTimeout(function(){ goIdle(); }, typeof delayMs==="number" ? delayMs : 5000);
   }
 
-  function showRoundTransition(title, copy, done) {
+  function showRoundTransition(title,copy,done) {
     clearTimeout(state.autoBackTimer);
-    el.roundTransitionKicker.textContent = isSurvivalMode() ? "Next Round" : "Get Ready";
-    el.roundTransitionTitle.textContent = title;
-    el.roundTransitionCopy.textContent = copy;
+    el.roundTransitionKicker.textContent=isSurvivalMode()?"Next Round":"Get Ready";
+    el.roundTransitionTitle.textContent=title; el.roundTransitionCopy.textContent=copy;
     el.roundTransition.classList.remove("hidden");
-
-    requestAnimationFrame(function () {
-      el.roundTransition.classList.add("show");
-    });
-
-    setTimeout(function () {
+    requestAnimationFrame(function(){ el.roundTransition.classList.add("show"); });
+    setTimeout(function(){
       el.roundTransition.classList.remove("show");
-      setTimeout(function () {
-        el.roundTransition.classList.add("hidden");
-        if (typeof done === "function") done();
-      }, 280);
-    }, 2400);
+      setTimeout(function(){ el.roundTransition.classList.add("hidden"); if (typeof done==="function") done(); },280);
+    },2400);
   }
 
   function getSurvivalTotalCompletedTime() {
-    return state.roundResults.reduce(function (sum, item) {
-      return sum + Number(item.time || 0);
-    }, 0);
+    return state.roundResults.reduce(function(s,i){return s+Number(i.time||0);},0);
   }
 
   function getHighestCompletedRound() {
-    return state.roundResults.length
-      ? Math.max.apply(null, state.roundResults.map(function (item) { return Number(item.round || 0); }))
-      : 0;
+    return state.roundResults.length ? Math.max.apply(null,state.roundResults.map(function(i){return Number(i.round||0);})) : 0;
   }
 
   function finishGoalModeSuccess(elapsed) {
-    if (state.playerName) {
-      saveScore({
-        n: state.playerName,
-        t: elapsed,
-        mode: "goal",
-        category: getCurrentLeaderboardCategory(),
-        winTarget: state.winTarget,
-        ts: Date.now()
-      });
-    }
-
-    state.playerName = "";
-    updateNameUI();
-    showResult(
-      "You Found a Match!",
-      "Target: " + getWinTargetLabelFor(state.deck.length, state.currentRound) + ". Time: " + elapsed.toFixed(2) + "s",
-      5000
-    );
+    if (state.playerName) saveScore({n:state.playerName,t:elapsed,mode:"goal",category:getCurrentLeaderboardCategory(),winTarget:state.winTarget,ts:Date.now()});
+    state.playerName=""; updateNameUI();
+    showResult("You Found a Match!","Target: "+getWinTargetLabelFor(state.deck.length,state.currentRound)+". Time: "+elapsed.toFixed(2)+"s",5000);
   }
 
   function finishSurvivalModeSuccess(totalTime) {
-    if (state.playerName) {
-      saveScore({
-        n: state.playerName,
-        t: totalTime,
-        r: Number(state.currentRound),
-        mode: "survival",
-        category: getCurrentLeaderboardCategory(),
-        difficulty: state.roundDifficulty,
-        ts: Date.now()
-      });
-    }
-
-    state.playerName = "";
-    updateNameUI();
-    showResult(
-      "Survival Complete!",
-      "Completed " + state.currentRound + " rounds in " + totalTime.toFixed(2) + "s",
-      6000
-    );
+    if (state.playerName) saveScore({n:state.playerName,t:totalTime,r:Number(state.currentRound),mode:"survival",category:getCurrentLeaderboardCategory(),difficulty:state.roundDifficulty,ts:Date.now()});
+    state.playerName=""; updateNameUI();
+    showResult("Survival Complete!","Completed "+state.currentRound+" rounds in "+totalTime.toFixed(2)+"s",6000);
   }
 
   function finishSurvivalModeLoss() {
-    const completedRound = getHighestCompletedRound();
-    const totalTime = getSurvivalTotalCompletedTime();
-
-    if (state.playerName && completedRound > 0) {
-      saveScore({
-        n: state.playerName,
-        t: totalTime,
-        r: completedRound,
-        mode: "survival",
-        category: getCurrentLeaderboardCategory(),
-        difficulty: state.roundDifficulty,
-        ts: Date.now()
-      });
-    }
-
-    state.playerName = "";
-    updateNameUI();
-
-    if (completedRound > 0) {
-      showResult(
-        "Round Over",
-        "You reached round " + completedRound + " with a total time of " + totalTime.toFixed(2) + "s",
-        6000
-      );
-    } else {
-      showResult(
-        "Time's Up!",
-        "You did not complete round 1. Starting over shortly...",
-        5000
-      );
-    }
+    const cr=getHighestCompletedRound(), tt=getSurvivalTotalCompletedTime();
+    if (state.playerName&&cr>0) saveScore({n:state.playerName,t:tt,r:cr,mode:"survival",category:getCurrentLeaderboardCategory(),difficulty:state.roundDifficulty,ts:Date.now()});
+    state.playerName=""; updateNameUI();
+    if (cr>0) showResult("Round Over","You reached round "+cr+" with a total time of "+tt.toFixed(2)+"s",6000);
+    else showResult("Time's Up!","You did not complete round 1. Starting over shortly...",5000);
   }
 
-  function advanceToNextRound() {
-    state.currentRound += 1;
-    startConfiguredRound();
-  }
+  function advanceToNextRound() { state.currentRound+=1; startConfiguredRound(); }
 
   function winRound() {
-    clearInterval(state.roundTimerId);
-    state.gameActive = false;
-
-    const elapsed = (Date.now() - state.roundStartedAt) / 1000;
-    state.roundResults.push({
-      round: state.currentRound,
-      time: elapsed,
-      misses: state.misses,
-      cardCount: state.activeCardCount,
-      timer: state.activeRoundTime,
-      target: state.activeWinTarget
-    });
-
-    if (!isSurvivalMode()) {
-      finishGoalModeSuccess(elapsed);
-      return;
-    }
-
-    const maxRounds = getMaxRoundsValue();
-
-    if (state.rounds === "endless") {
-      showRoundTransition(
-        "Round " + state.currentRound + " Complete",
-        "Fresh photos loaded. Next target: " + getWinTargetLabelFor(state.activeCardCount, state.currentRound + 1) + ".",
-        advanceToNextRound
-      );
-      return;
-    }
-
-    if (state.currentRound < maxRounds) {
-      showRoundTransition(
-        "Round " + state.currentRound + " Complete",
-        "Fresh photos loaded. Next target: " + getWinTargetLabelFor(state.activeCardCount, state.currentRound + 1) + ".",
-        advanceToNextRound
-      );
-      return;
-    }
-
+    clearInterval(state.roundTimerId); state.gameActive=false;
+    const elapsed=(Date.now()-state.roundStartedAt)/1000;
+    state.roundResults.push({round:state.currentRound,time:elapsed,misses:state.misses,cardCount:state.activeCardCount,timer:state.activeRoundTime,target:state.activeWinTarget});
+    if (!isSurvivalMode()) { finishGoalModeSuccess(elapsed); return; }
+    const maxR=getMaxRoundsValue();
+    const copy="Fresh photos loaded. Next target: "+getWinTargetLabelFor(state.activeCardCount,state.currentRound+1)+".";
+    if (state.rounds==="endless"||state.currentRound<maxR) { showRoundTransition("Round "+state.currentRound+" Complete",copy,advanceToNextRound); return; }
     finishSurvivalModeSuccess(getSurvivalTotalCompletedTime());
   }
 
   function loseRound() {
-    clearInterval(state.roundTimerId);
-    state.gameActive = false;
-
-    if (!isSurvivalMode()) {
-      state.playerName = "";
-      updateNameUI();
-      showResult("Time's Up!", "Starting over shortly...");
-      return;
-    }
-
+    clearInterval(state.roundTimerId); state.gameActive=false;
+    if (!isSurvivalMode()) { state.playerName=""; updateNameUI(); showResult("Time's Up!","Starting over shortly..."); return; }
     finishSurvivalModeLoss();
   }
 
   function resetRoundState() {
-    state.currentRound = 1;
-    state.roundResults = [];
-    state.misses = 0;
-    state.activeRoundTime = state.roundTime;
-    state.activeCardCount = state.cardCount;
-    state.activeWinTarget = getActiveWinTargetForDeck(state.cardCount, 1);
+    state.currentRound=1; state.roundResults=[]; state.misses=0;
+    state.activeRoundTime=state.roundTime; state.activeCardCount=state.cardCount;
+    state.activeWinTarget=getActiveWinTargetForDeck(state.cardCount,1);
   }
 
   function hideCountdown(immediate) {
-    if (immediate) {
-      el.countdown.classList.remove("show");
-      el.countdown.classList.add("hidden");
-      return;
-    }
-
+    if (immediate) { el.countdown.classList.remove("show"); el.countdown.classList.add("hidden"); return; }
     el.countdown.classList.remove("show");
-    setTimeout(function () {
-      el.countdown.classList.add("hidden");
-    }, 280);
+    setTimeout(function(){ el.countdown.classList.add("hidden"); },280);
   }
 
-  function showCountdownValue(value) {
-    el.countdown.textContent = value;
-    el.countdown.classList.remove("hidden");
-
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        el.countdown.classList.add("show");
-      });
-    });
+  function showCountdownValue(v) {
+    el.countdown.textContent=v; el.countdown.classList.remove("hidden");
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ el.countdown.classList.add("show"); }); });
   }
 
   function goIdle() {
-    clearTimeout(state.autoBackTimer);
-    clearInterval(state.roundTimerId);
-
-    resetRoundState();
-    setTimerDisplay(state.roundTime);
-    el.player.textContent = "";
-    state.playerName = "";
-    state.firstCard = null;
-    state.lockBoard = false;
-    state.matchedPairs = 0;
-    state.gameActive = false;
-
-    el.center.classList.add("hidden");
-    hideCountdown(true);
-    el.roundTransition.classList.remove("show");
-    el.roundTransition.classList.add("hidden");
-
-    updateNameUI();
-    updateRoundPill();
-    updateTitleForCurrentTarget();
-
-    if (state.deck.length) {
-      renderBoard(state.idlePreview, false);
-    }
-
-    el.play.classList.remove("hidden");
-    updateBoardShellMode();
-    renderLiveLeaderboard();
-    startIdleRefreshTimer();
+    clearTimeout(state.autoBackTimer); clearInterval(state.roundTimerId);
+    resetRoundState(); setTimerDisplay(state.roundTime);
+    el.player.textContent=""; state.playerName=""; state.firstCard=null;
+    state.lockBoard=false; state.matchedPairs=0; state.gameActive=false;
+    el.center.classList.add("hidden"); hideCountdown(true);
+    el.roundTransition.classList.remove("show"); el.roundTransition.classList.add("hidden");
+    updateNameUI(); updateRoundPill(); updateTitleForCurrentTarget();
+    if (state.deck.length) renderBoard(state.idlePreview,false);
+    el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboard(); startIdleRefreshTimer();
   }
 
   function runCountdown(done) {
-    let value = state.startCountdown;
-
-    if (value <= 0) {
-      hideCountdown(true);
-      done();
-      return;
-    }
-
-    showCountdownValue(value);
-
-    const id = setInterval(function () {
-      value -= 1;
-
-      if (value <= 0) {
-        clearInterval(id);
-        hideCountdown(false);
-
-        setTimeout(function () {
-          done();
-        }, 280);
-      } else {
-        el.countdown.textContent = value;
-      }
-    }, 1000);
+    let v=state.startCountdown;
+    if (v<=0) { hideCountdown(true); done(); return; }
+    showCountdownValue(v);
+    const id=setInterval(function(){
+      v-=1;
+      if (v<=0) { clearInterval(id); hideCountdown(false); setTimeout(function(){ done(); },280); }
+      else el.countdown.textContent=v;
+    },1000);
   }
 
   async function prepareDeck(withAnimation) {
-    const idleDeck = await buildDeck(state.cardCount);
-    state.deck = idleDeck;
-    state.activeCardCount = state.cardCount;
-    state.activeWinTarget = getActiveWinTargetForDeck(state.activeCardCount, state.currentRound);
-
+    const deck=await buildDeck(state.cardCount);
+    state.deck=deck; state.activeCardCount=state.cardCount;
+    state.activeWinTarget=getActiveWinTargetForDeck(state.activeCardCount,state.currentRound);
     if (!state.gameActive) {
-      if (withAnimation) {
-        animateBoardRefresh(state.idlePreview);
-      } else {
-        renderBoard(state.idlePreview, false);
-      }
+      if (withAnimation) animateBoardRefresh(state.idlePreview); else renderBoard(state.idlePreview,false);
     }
-
     updateTitleForCurrentTarget();
   }
 
   async function startConfiguredRound() {
     stopIdleRefreshTimer();
-
-    const roundConfig = getRoundConfig(state.currentRound);
-    state.activeRoundTime = roundConfig.timer;
-    state.activeCardCount = roundConfig.cardCount;
-    state.matchedPairs = 0;
-    state.misses = 0;
-    state.gameActive = false;
-    state.firstCard = null;
-    state.lockBoard = true;
-
-    state.deck = await buildDeck(state.activeCardCount);
-    state.activeWinTarget = getActiveWinTargetForDeck(state.deck.length, state.currentRound);
-
-    updateRoundPill();
-    updateTitleForCurrentTarget();
-
-    el.center.classList.add("hidden");
-    el.play.classList.add("hidden");
-
-    renderBoard(state.startPreview, false);
-    updateBoardShellMode();
-
-    runCountdown(function () {
-      [...el.board.children].forEach(function (card) {
-        if (!card.classList.contains("matched")) {
-          card.classList.remove("show");
-        }
-      });
-
-      state.roundStartedAt = Date.now();
-      state.lockBoard = false;
-      state.gameActive = true;
-      updateBoardShellMode();
-      startRoundTimer();
+    const rc=getRoundConfig(state.currentRound);
+    state.activeRoundTime=rc.timer; state.activeCardCount=rc.cardCount;
+    state.matchedPairs=0; state.misses=0; state.gameActive=false; state.firstCard=null; state.lockBoard=true;
+    state.deck=await buildDeck(state.activeCardCount);
+    state.activeWinTarget=getActiveWinTargetForDeck(state.deck.length,state.currentRound);
+    updateRoundPill(); updateTitleForCurrentTarget();
+    el.center.classList.add("hidden"); el.play.classList.add("hidden");
+    renderBoard(state.startPreview,false); updateBoardShellMode();
+    runCountdown(function(){
+      [...el.board.children].forEach(function(c){ if (!c.classList.contains("matched")) c.classList.remove("show"); });
+      state.roundStartedAt=Date.now(); state.lockBoard=false; state.gameActive=true;
+      updateBoardShellMode(); startRoundTimer();
     });
   }
 
   async function startGame() {
-    if (state.playerName.length < 2) return;
-
+    if (state.playerName.length<2) return;
     resetRoundState();
-
-    el.center.classList.add("hidden");
-    updateBoardShellMode();
-
-    const introTarget = getWinTargetLabelFor(state.cardCount, 1);
-    const introTitle = getTitleForTarget(state.cardCount, 1);
-    const title = isSurvivalMode() ? "Round 1" : "Start";
-    const copy = isSurvivalMode()
-      ? "Fresh photos loaded for round 1. Target: " + introTarget + "."
-      : "Fresh photos loaded. " + introTitle + ".";
-
-    showRoundTransition(title, copy, startConfiguredRound);
+    el.center.classList.add("hidden"); updateBoardShellMode();
+    const introTarget=getWinTargetLabelFor(state.cardCount,1);
+    const introTitle=getTitleForTarget(state.cardCount,1);
+    const title=isSurvivalMode()?"Round 1":"Start";
+    const copy=isSurvivalMode() ? "Fresh photos loaded for round 1. Target: "+introTarget+"." : "Fresh photos loaded. "+introTitle+".";
+    showRoundTransition(title,copy,startConfiguredRound);
   }
 
-  function bindColorPair(picker, text, fallback) {
-    picker.addEventListener("input", function () {
-      text.value = picker.value.toUpperCase();
-    });
-
-    text.addEventListener("input", function () {
-      const normalized = normalizeHex(text.value, fallback);
-      if (isValidHex(text.value.trim())) {
-        picker.value = normalized;
-        text.value = normalized;
-      }
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Color pair binding
+  // ─────────────────────────────────────────────────────────────────────────────
+  function bindColorPair(picker,text,fallback) {
+    picker.addEventListener("input",function(){ text.value=picker.value.toUpperCase(); });
+    text.addEventListener("input",function(){
+      if (isValidHex(text.value.trim())) { const n=normalizeHex(text.value,fallback); picker.value=n; text.value=n; }
     });
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Reset all
+  // ─────────────────────────────────────────────────────────────────────────────
   function resetAllSettings() {
-    const confirmed = window.confirm("Are you sure you want to reset all settings, custom colors, custom images, logos, font, PIN, and leaderboard?");
-    if (!confirmed) return;
-
-    localStorage.removeItem(STORAGE_KEYS.settings);
-    localStorage.removeItem(STORAGE_KEYS.leaderboard);
-
-    state.winTarget = DEFAULTS.winTarget;
-    state.startCountdown = DEFAULTS.startCountdown;
-    state.roundTime = DEFAULTS.roundTime;
-    state.idleRefreshSeconds = DEFAULTS.idleRefreshSeconds;
-    state.cardCount = DEFAULTS.cardCount;
-    state.columns = DEFAULTS.columns;
-    state.boardWidthPercent = DEFAULTS.boardWidthPercent;
-    state.boardMinHeight = DEFAULTS.boardMinHeight;
-    state.boardGap = DEFAULTS.boardGap;
-    state.idlePreview = DEFAULTS.idlePreview;
-    state.startPreview = DEFAULTS.startPreview;
-    state.adminPin = DEFAULTS.adminPin;
-    state.showCursor = DEFAULTS.showCursor;
-    state.hudOffsetY = DEFAULTS.hudOffsetY;
-    state.boardOffsetY = DEFAULTS.boardOffsetY;
-    state.rounds = DEFAULTS.rounds;
-    state.roundDifficulty = DEFAULTS.roundDifficulty;
-    state.theme = JSON.parse(JSON.stringify(DEFAULTS.theme));
-    state.logoUrl = DEFAULTS.logoUrl;
-    state.headerLogoUrl = DEFAULTS.headerLogoUrl;
-    state.headerLogoHeight = DEFAULTS.headerLogoHeight;
-    state.headerLogoMaxWidth = DEFAULTS.headerLogoMaxWidth;
-    state.headerLogoOffsetY = DEFAULTS.headerLogoOffsetY;
-    state.bgImageUrl = DEFAULTS.bgImageUrl;
-    state.customFontDataUrl = "";
-    state.customFontFileName = "";
-    state.customFontFamily = "";
-
+    if (!window.confirm("Are you sure you want to reset all settings, custom colors, custom images, logos, font, PIN, and leaderboard?")) return;
+    localStorage.removeItem(STORAGE_KEYS.settings); localStorage.removeItem(STORAGE_KEYS.leaderboard);
+    Object.assign(state, JSON.parse(JSON.stringify(DEFAULTS)));
     resetRoundState();
-
-    applyThemeColors(state.theme);
-    applyLogo(state.logoUrl);
-    applyHeaderLogo(state.headerLogoUrl);
-    applyHeaderLogoLayout();
-    applyHudOffset();
-    applyBoardOffset();
-    applyBoardAreaSizing();
-    applyBackgroundImage(state.bgImageUrl);
-    applyCustomFont("", "");
-    renderLeaderboard();
-    updateSettingsUI();
-    applyCursorMode();
-    updateRoundPill();
-    updateTitleForCurrentTarget();
-    setTimerDisplay(state.roundTime);
-    startIdleRefreshTimer();
-
-    if (!state.gameActive && state.deck.length) {
-      renderBoard(state.idlePreview, false);
-    }
+    applyThemeColors(state.theme); applyLogo(state.logoUrl); applyHeaderLogo(state.headerLogoUrl);
+    applyHeaderLogoLayout(); applyHudOffset(); applyBoardOffset(); applyBoardAreaSizing();
+    applyBackgroundImage(state.bgImageUrl); applyCustomFont("","");
+    renderLeaderboard(); updateSettingsUI(); applyCursorMode(); updateRoundPill(); updateTitleForCurrentTarget();
+    setTimerDisplay(state.roundTime); startIdleRefreshTimer();
+    if (!state.gameActive&&state.deck.length) renderBoard(state.idlePreview,false);
   }
 
-  function handleImageUpload(file, onLoad) {
+  function handleImageUpload(file,onLoad) {
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function (event) {
-      const result = String(event.target.result || "");
-      if (!result) return;
-
-      try {
-        onLoad(result, file.name || "");
-        persistSettings();
-      } catch (error) {
-        console.error(error);
-        alert("Could not save that file. Try a smaller file.");
-      }
+    const reader=new FileReader();
+    reader.onload=function(e){
+      const result=String(e.target.result||""); if (!result) return;
+      try { onLoad(result,file.name||""); persistSettings(); }
+      catch(err){ console.error(err); alert("Could not save that file. Try a smaller file."); }
     };
     reader.readAsDataURL(file);
   }
 
   function savePin() {
-    const current = el.currentPin.value.trim();
-    const next = el.newPin.value.trim();
-    const confirm = el.confirmPin.value.trim();
-
-    if (current !== state.adminPin) {
-      el.pinStatus.textContent = "Current PIN is incorrect.";
-      return;
-    }
-
-    if (!next || next.length < 4) {
-      el.pinStatus.textContent = "New PIN must be at least 4 characters.";
-      return;
-    }
-
-    if (next !== confirm) {
-      el.pinStatus.textContent = "New PIN and confirmation do not match.";
-      return;
-    }
-
-    state.adminPin = next;
-    persistSettings();
-    el.currentPin.value = "";
-    el.newPin.value = "";
-    el.confirmPin.value = "";
-    el.pinStatus.textContent = "PIN updated successfully.";
+    const cur=el.currentPin.value.trim(), nx=el.newPin.value.trim(), cf=el.confirmPin.value.trim();
+    if (cur!==state.adminPin) { el.pinStatus.textContent="Current PIN is incorrect."; return; }
+    if (!nx||nx.length<4) { el.pinStatus.textContent="New PIN must be at least 4 characters."; return; }
+    if (nx!==cf) { el.pinStatus.textContent="New PIN and confirmation do not match."; return; }
+    state.adminPin=nx; persistSettings();
+    el.currentPin.value=""; el.newPin.value=""; el.confirmPin.value="";
+    el.pinStatus.textContent="PIN updated successfully.";
   }
 
   function exportSettingsToJson() {
-    const payload = buildSettingsPayload();
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    a.href = url;
-    a.download = "focus-pocus-match-settings-" + stamp + ".json";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(function () {
-      URL.revokeObjectURL(url);
-    }, 1000);
-    el.settingsTransferStatus.textContent = "Settings JSON exported.";
+    const blob=new Blob([JSON.stringify(buildSettingsPayload(),null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download="find-the-match-settings-"+new Date().toISOString().replace(/[:.]/g,"-")+".json";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){URL.revokeObjectURL(url);},1000);
+    el.settingsTransferStatus.textContent="Settings JSON exported.";
   }
 
   function importSettingsFromJsonText(text) {
     let parsed;
-    try {
-      parsed = JSON.parse(text);
-    } catch (error) {
-      alert("That file is not valid JSON.");
-      return;
-    }
-
-    const incoming = parsed && parsed.settings ? parsed.settings : parsed;
-    if (!incoming || typeof incoming !== "object") {
-      alert("That JSON file does not contain valid settings.");
-      return;
-    }
-
+    try { parsed=JSON.parse(text); } catch(e){ alert("That file is not valid JSON."); return; }
+    const incoming=parsed&&parsed.settings?parsed.settings:parsed;
+    if (!incoming||typeof incoming!=="object") { alert("That JSON file does not contain valid settings."); return; }
     applySettingsObject(incoming);
-    applyThemeColors(state.theme);
-    applyLogo(state.logoUrl);
-    applyHeaderLogo(state.headerLogoUrl);
-    applyHeaderLogoLayout();
-    applyHudOffset();
-    applyBoardOffset();
-    applyBoardAreaSizing();
-    applyBackgroundImage(state.bgImageUrl);
-    applyCustomFont(state.customFontDataUrl, state.customFontFileName);
-    updateSettingsUI();
-    applyCursorMode();
-    updateRoundPill();
-    updateTitleForCurrentTarget();
-    persistSettings();
-
-    if (!state.gameActive) {
-      setTimerDisplay(state.roundTime);
-      if (state.deck.length) renderBoard(state.idlePreview, false);
-      startIdleRefreshTimer();
-    }
-
-    el.settingsTransferStatus.textContent = "Settings JSON imported successfully.";
+    applyThemeColors(state.theme); applyLogo(state.logoUrl); applyHeaderLogo(state.headerLogoUrl);
+    applyHeaderLogoLayout(); applyHudOffset(); applyBoardOffset(); applyBoardAreaSizing();
+    applyBackgroundImage(state.bgImageUrl); applyCustomFont(state.customFontDataUrl,state.customFontFileName);
+    updateSettingsUI(); applyCursorMode(); updateRoundPill(); updateTitleForCurrentTarget(); persistSettings();
+    if (!state.gameActive) { setTimerDisplay(state.roundTime); if (state.deck.length) renderBoard(state.idlePreview,false); startIdleRefreshTimer(); }
+    el.settingsTransferStatus.textContent="Settings JSON imported successfully.";
   }
 
-  el.play.onclick = function () {
-    el.play.classList.add("hidden");
-    showNameEntry();
-  };
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Event bindings
+  // ─────────────────────────────────────────────────────────────────────────────
+  el.play.onclick=function(){ el.play.classList.add("hidden"); showNameEntry(); };
+  el.start.onclick=startGame;
+  el.cancel.onclick=goIdle;
+  el.replay.onclick=goIdle;
+  el.adminButton.onclick=openAdmin;
+  el.adminBackdrop.onclick=closeAdmin;
+  el.adminCloseLock.onclick=closeAdmin;
+  el.adminClose.onclick=closeAdmin;
+  el.adminUnlock.onclick=unlockAdmin;
+  el.adminPin.addEventListener("keydown",function(e){ if (e.key==="Enter") unlockAdmin(); });
 
-  el.start.onclick = startGame;
-  el.cancel.onclick = goIdle;
-  el.replay.onclick = goIdle;
-
-  el.adminButton.onclick = openAdmin;
-  el.adminBackdrop.onclick = closeAdmin;
-  el.adminCloseLock.onclick = closeAdmin;
-  el.adminClose.onclick = closeAdmin;
-  el.adminUnlock.onclick = unlockAdmin;
-
-  el.adminPin.addEventListener("keydown", function (event) {
-    if (event.key === "Enter") unlockAdmin();
-  });
-
+  // ── Sliders with frosted glass preview ──
+  // Header Logo Size
   if (el.headerLogoSizeInput) {
-    el.headerLogoSizeInput.addEventListener("input", function () {
-      const value = parseInt(el.headerLogoSizeInput.value, 10);
-      if (!isNaN(value)) {
-        state.headerLogoHeight = Math.max(24, Math.min(220, value));
-        state.headerLogoMaxWidth = Math.max(80, Math.round(state.headerLogoHeight * 4.3));
-        applyHeaderLogoLayout();
-        persistSettings();
-        updateSettingsUI();
+    bindSliderFrost(el.headerLogoSizeInput);
+    el.headerLogoSizeInput.addEventListener("input",function(){
+      const v=parseInt(el.headerLogoSizeInput.value,10);
+      if (!isNaN(v)) {
+        state.headerLogoHeight=Math.max(24,Math.min(220,v));
+        state.headerLogoMaxWidth=Math.max(80,Math.round(state.headerLogoHeight*4.3));
+        applyHeaderLogoLayout(); persistSettings();
+        if (el.headerLogoSizeValue) el.headerLogoSizeValue.textContent=state.headerLogoHeight+"px";
       }
     });
   }
 
+  // Header Logo Offset
   if (el.headerLogoOffsetInput) {
-    el.headerLogoOffsetInput.addEventListener("input", function () {
-      const value = parseInt(el.headerLogoOffsetInput.value, 10);
-      if (!isNaN(value)) {
-        state.headerLogoOffsetY = Math.max(0, Math.min(500, value));
-        applyHeaderLogoLayout();
-        persistSettings();
+    bindSliderFrost(el.headerLogoOffsetInput);
+    el.headerLogoOffsetInput.addEventListener("input",function(){
+      const v=parseInt(el.headerLogoOffsetInput.value,10);
+      if (!isNaN(v)) {
+        state.headerLogoOffsetY=Math.max(0,Math.min(500,v));
+        applyHeaderLogoLayout(); persistSettings();
+        if (el.headerLogoOffsetValue) el.headerLogoOffsetValue.textContent=state.headerLogoOffsetY+"px";
       }
     });
   }
 
+  // HUD Offset
   if (el.hudOffsetInput) {
-    el.hudOffsetInput.addEventListener("input", function () {
-      const value = parseInt(el.hudOffsetInput.value, 10);
-      if (!isNaN(value)) {
-        state.hudOffsetY = Math.max(-500, Math.min(500, value));
-        applyHudOffset();
-        persistSettings();
+    bindSliderFrost(el.hudOffsetInput);
+    el.hudOffsetInput.addEventListener("input",function(){
+      const v=parseInt(el.hudOffsetInput.value,10);
+      if (!isNaN(v)) {
+        state.hudOffsetY=Math.max(-500,Math.min(500,v));
+        applyHudOffset(); persistSettings();
+        if (el.hudOffsetValue) el.hudOffsetValue.textContent=state.hudOffsetY+"px";
       }
     });
   }
 
+  // Board Offset
   if (el.boardOffsetInput) {
-    el.boardOffsetInput.addEventListener("input", function () {
-      const value = parseInt(el.boardOffsetInput.value, 10);
-      if (!isNaN(value)) {
-        state.boardOffsetY = Math.max(-500, Math.min(500, value));
-        applyBoardOffset();
-        persistSettings();
+    bindSliderFrost(el.boardOffsetInput);
+    el.boardOffsetInput.addEventListener("input",function(){
+      const v=parseInt(el.boardOffsetInput.value,10);
+      if (!isNaN(v)) {
+        state.boardOffsetY=Math.max(-500,Math.min(500,v));
+        applyBoardOffset(); persistSettings();
+        if (el.boardOffsetValue) el.boardOffsetValue.textContent=state.boardOffsetY+"px";
       }
     });
   }
 
+  // Board Width
   if (el.boardWidthRange) {
-    el.boardWidthRange.addEventListener("input", function () {
-      const value = parseInt(el.boardWidthRange.value, 10);
-      if (!isNaN(value)) {
-        state.boardWidthPercent = Math.max(60, Math.min(100, value));
+    bindSliderFrost(el.boardWidthRange);
+    el.boardWidthRange.addEventListener("input",function(){
+      const v=parseInt(el.boardWidthRange.value,10);
+      if (!isNaN(v)) {
+        state.boardWidthPercent=Math.max(60,Math.min(100,v));
         applyBoardAreaSizing();
-        if (el.boardWidthValue) el.boardWidthValue.textContent = state.boardWidthPercent + "%";
-        persistSettings();
-        rerenderBoardForColumnChange();
+        if (el.boardWidthValue) el.boardWidthValue.textContent=state.boardWidthPercent+"%";
+        persistSettings(); rerenderBoardForColumnChange();
       }
     });
   }
 
+  // Board Height
   if (el.boardHeightRange) {
-    el.boardHeightRange.addEventListener("input", function () {
-      const value = parseInt(el.boardHeightRange.value, 10);
-      if (!isNaN(value)) {
-        state.boardMinHeight = Math.max(0, Math.min(1400, value));
+    bindSliderFrost(el.boardHeightRange);
+    el.boardHeightRange.addEventListener("input",function(){
+      const v=parseInt(el.boardHeightRange.value,10);
+      if (!isNaN(v)) {
+        state.boardMinHeight=Math.max(0,Math.min(1400,v));
         applyBoardAreaSizing();
-        if (el.boardHeightValue) el.boardHeightValue.textContent = state.boardMinHeight + "px";
-        persistSettings();
-        rerenderBoardForColumnChange();
+        if (el.boardHeightValue) el.boardHeightValue.textContent=state.boardMinHeight+"px";
+        persistSettings(); rerenderBoardForColumnChange();
       }
     });
   }
 
+  // Board Gap
   if (el.boardGapRange) {
-    el.boardGapRange.addEventListener("input", function () {
-      const value = parseInt(el.boardGapRange.value, 10);
-      if (!isNaN(value)) {
-        state.boardGap = Math.max(6, Math.min(30, value));
+    bindSliderFrost(el.boardGapRange);
+    el.boardGapRange.addEventListener("input",function(){
+      const v=parseInt(el.boardGapRange.value,10);
+      if (!isNaN(v)) {
+        state.boardGap=Math.max(6,Math.min(30,v));
         applyBoardAreaSizing();
-        if (el.boardGapValue) el.boardGapValue.textContent = state.boardGap + "px";
-        persistSettings();
-        rerenderBoardForColumnChange();
+        if (el.boardGapValue) el.boardGapValue.textContent=state.boardGap+"px";
+        persistSettings(); rerenderBoardForColumnChange();
       }
     });
   }
 
-  el.savePin.onclick = savePin;
+  el.savePin.onclick=savePin;
 
-  el.winTargets.forEach(function (button) {
-    button.onclick = function () {
+  el.winTargets.forEach(function(b){
+    b.onclick=function(){
       if (isWinTargetOverridden()) return;
-
-      const value = button.getAttribute("data-win");
-      state.winTarget = value === "all" ? "all" : parseInt(value, 10);
-      updateSettingsUI();
-      renderLeaderboard();
-      persistSettings();
+      const v=b.getAttribute("data-win");
+      state.winTarget=v==="all"?"all":parseInt(v,10);
+      updateSettingsUI(); renderLeaderboard(); persistSettings();
     };
   });
 
-  el.columnButtons.forEach(function (button) {
-    button.onclick = function () {
-      const value = parseInt(button.getAttribute("data-columns"), 10);
-      if (COLUMN_OPTIONS.indexOf(value) === -1) return;
-
-      state.columns = value;
-      updateSettingsUI();
-      persistSettings();
-      rerenderBoardForColumnChange();
+  el.columnButtons.forEach(function(b){
+    b.onclick=function(){
+      const v=parseInt(b.getAttribute("data-columns"),10);
+      if (COLUMN_OPTIONS.indexOf(v)===-1) return;
+      state.columns=v; updateSettingsUI(); persistSettings(); rerenderBoardForColumnChange();
     };
   });
 
-  el.cardCountButtons.forEach(function (button) {
-    button.onclick = function () {
-      state.cardCount = parseInt(button.getAttribute("data-card-count"), 10);
-      state.activeCardCount = state.cardCount;
-      updateSettingsUI();
-      persistSettings();
-      prepareDeck(true);
+  el.cardCountButtons.forEach(function(b){
+    b.onclick=function(){
+      state.cardCount=parseInt(b.getAttribute("data-card-count"),10);
+      state.activeCardCount=state.cardCount;
+      updateSettingsUI(); persistSettings(); prepareDeck(true);
     };
   });
 
-  el.roundButtons.forEach(function (button) {
-    button.onclick = function () {
-      const value = button.getAttribute("data-rounds");
-      state.rounds = value === "endless" ? "endless" : parseInt(value, 10);
-      updateSettingsUI();
-      updateRoundPill();
-      renderLeaderboard();
-      persistSettings();
+  el.roundButtons.forEach(function(b){
+    b.onclick=function(){
+      const v=b.getAttribute("data-rounds");
+      state.rounds=v==="endless"?"endless":parseInt(v,10);
+      updateSettingsUI(); updateRoundPill(); renderLeaderboard(); persistSettings();
     };
   });
 
-  el.difficultyButtons.forEach(function (button) {
-    button.onclick = function () {
-      const value = button.getAttribute("data-difficulty");
-      if (ROUND_DIFFICULTIES.indexOf(value) === -1) return;
-      state.roundDifficulty = value;
-      updateSettingsUI();
-      updateRoundPill();
-      renderLeaderboard();
-      persistSettings();
+  el.difficultyButtons.forEach(function(b){
+    b.onclick=function(){
+      const v=b.getAttribute("data-difficulty");
+      if (ROUND_DIFFICULTIES.indexOf(v)===-1) return;
+      state.roundDifficulty=v; updateSettingsUI(); updateRoundPill(); renderLeaderboard(); persistSettings();
     };
   });
 
-  el.countdownInput.addEventListener("input", function () {
-    const value = parseInt(el.countdownInput.value, 10);
-    if (!isNaN(value)) {
-      state.startCountdown = Math.max(0, Math.min(10, value));
-      persistSettings();
-    }
+  el.countdownInput.addEventListener("input",function(){
+    const v=parseInt(el.countdownInput.value,10);
+    if (!isNaN(v)) { state.startCountdown=Math.max(0,Math.min(10,v)); persistSettings(); }
   });
 
-  el.roundTimerInput.addEventListener("input", function () {
-    const value = parseInt(el.roundTimerInput.value, 10);
-    if (!isNaN(value)) {
-      state.roundTime = Math.max(5, Math.min(120, value));
-      if (!state.gameActive) setTimerDisplay(state.roundTime);
-      persistSettings();
-    }
+  el.roundTimerInput.addEventListener("input",function(){
+    const v=parseInt(el.roundTimerInput.value,10);
+    if (!isNaN(v)) { state.roundTime=Math.max(5,Math.min(120,v)); if (!state.gameActive) setTimerDisplay(state.roundTime); persistSettings(); }
   });
 
-  el.idleRefreshInput.addEventListener("input", function () {
-    const value = parseInt(el.idleRefreshInput.value, 10);
-    if (!isNaN(value)) {
-      state.idleRefreshSeconds = Math.max(0, Math.min(600, value));
-      persistSettings();
-      startIdleRefreshTimer();
-    }
+  el.idleRefreshInput.addEventListener("input",function(){
+    const v=parseInt(el.idleRefreshInput.value,10);
+    if (!isNaN(v)) { state.idleRefreshSeconds=Math.max(0,Math.min(600,v)); persistSettings(); startIdleRefreshTimer(); }
   });
 
-  el.idlePreviewInput.addEventListener("change", function () {
-    state.idlePreview = el.idlePreviewInput.checked;
-    if (!state.gameActive && state.deck.length) renderBoard(state.idlePreview, false);
+  el.idlePreviewInput.addEventListener("change",function(){
+    state.idlePreview=el.idlePreviewInput.checked;
+    if (!state.gameActive&&state.deck.length) renderBoard(state.idlePreview,false);
     persistSettings();
   });
 
-  el.startPreviewInput.addEventListener("change", function () {
-    state.startPreview = el.startPreviewInput.checked;
-    persistSettings();
-  });
+  el.startPreviewInput.addEventListener("change",function(){ state.startPreview=el.startPreviewInput.checked; persistSettings(); });
 
-  el.showCursorInput.addEventListener("change", function () {
-    state.showCursor = el.showCursorInput.checked;
-    applyCursorMode();
-    persistSettings();
-  });
+  el.showCursorInput.addEventListener("change",function(){ state.showCursor=el.showCursorInput.checked; applyCursorMode(); persistSettings(); });
 
-  el.presetButtons.forEach(function (button) {
-    button.onclick = function () {
-      applyThemePreset(button.getAttribute("data-preset"));
-    };
-  });
+  el.presetButtons.forEach(function(b){ b.onclick=function(){ applyThemePreset(b.getAttribute("data-preset")); }; });
 
-  bindColorPair(el.bgPicker, el.bgText, DEFAULTS.theme.bg);
-  bindColorPair(el.accentPicker, el.accentText, DEFAULTS.theme.accent);
-  bindColorPair(el.accentTextPicker, el.accentTextText, DEFAULTS.theme.accentText);
-  bindColorPair(el.cardPicker, el.cardText, DEFAULTS.theme.card);
-  bindColorPair(el.panelPicker, el.panelText, DEFAULTS.theme.panel);
+  bindColorPair(el.bgPicker,el.bgText,DEFAULTS.theme.bg);
+  bindColorPair(el.accentPicker,el.accentText,DEFAULTS.theme.accent);
+  bindColorPair(el.accentTextPicker,el.accentTextText,DEFAULTS.theme.accentText);
+  bindColorPair(el.cardPicker,el.cardText,DEFAULTS.theme.card);
+  bindColorPair(el.panelPicker,el.panelText,DEFAULTS.theme.panel);
 
-  el.applyTheme.onclick = function () {
-    applyThemeColors({
-      bg: el.bgText.value,
-      accent: el.accentText.value,
-      accentText: el.accentTextText.value,
-      card: el.cardText.value,
-      panel: el.panelText.value
-    });
+  el.applyTheme.onclick=function(){
+    applyThemeColors({bg:el.bgText.value,accent:el.accentText.value,accentText:el.accentTextText.value,card:el.cardText.value,panel:el.panelText.value});
   };
+  el.resetTheme.onclick=function(){ applyThemePreset("dark"); };
+  el.resetLeaderboard.onclick=function(){ if (window.confirm("Are you sure you want to reset the leaderboard?")) clearLeaderboard(); };
+  el.resetAll.onclick=resetAllSettings;
 
-  el.resetTheme.onclick = function () {
-    applyThemePreset("dark");
-  };
-
-  el.resetLeaderboard.onclick = function () {
-    const confirmed = window.confirm("Are you sure you want to reset the leaderboard?");
-    if (!confirmed) return;
-    clearLeaderboard();
-  };
-
-  el.resetAll.onclick = resetAllSettings;
-
-  el.logoUpload.addEventListener("change", function () {
-    const file = el.logoUpload.files && el.logoUpload.files[0];
-    if (file) handleImageUpload(file, function (dataUrl) {
-      applyLogo(dataUrl);
-    });
-    el.logoUpload.value = "";
+  el.logoUpload.addEventListener("change",function(){
+    const f=el.logoUpload.files&&el.logoUpload.files[0];
+    if (f) handleImageUpload(f,function(d){ applyLogo(d); });
+    el.logoUpload.value="";
   });
 
-  el.headerLogoUpload.addEventListener("change", function () {
-    const file = el.headerLogoUpload.files && el.headerLogoUpload.files[0];
-    if (file) handleImageUpload(file, function (dataUrl) {
-      applyHeaderLogo(dataUrl);
-    });
-    el.headerLogoUpload.value = "";
+  el.headerLogoUpload.addEventListener("change",function(){
+    const f=el.headerLogoUpload.files&&el.headerLogoUpload.files[0];
+    if (f) handleImageUpload(f,function(d){ applyHeaderLogo(d); });
+    el.headerLogoUpload.value="";
   });
 
-  el.bgUpload.addEventListener("change", function () {
-    const file = el.bgUpload.files && el.bgUpload.files[0];
-    if (file) handleImageUpload(file, function (dataUrl) {
-      applyBackgroundImage(dataUrl);
-    });
-    el.bgUpload.value = "";
+  el.bgUpload.addEventListener("change",function(){
+    const f=el.bgUpload.files&&el.bgUpload.files[0];
+    if (f) handleImageUpload(f,function(d){ applyBackgroundImage(d); });
+    el.bgUpload.value="";
   });
 
-  el.fontUpload.addEventListener("change", function () {
-    const file = el.fontUpload.files && el.fontUpload.files[0];
-    if (file) {
-      handleImageUpload(file, function (dataUrl, fileName) {
-        applyCustomFont(dataUrl, fileName);
-      });
-    }
-    el.fontUpload.value = "";
+  el.fontUpload.addEventListener("change",function(){
+    const f=el.fontUpload.files&&el.fontUpload.files[0];
+    if (f) handleImageUpload(f,function(d,n){ applyCustomFont(d,n); });
+    el.fontUpload.value="";
   });
 
-  el.exportSettings.addEventListener("click", exportSettingsToJson);
-
-  el.importSettings.addEventListener("click", function () {
-    el.importSettingsFile.click();
+  el.exportSettings.addEventListener("click",exportSettingsToJson);
+  el.importSettings.addEventListener("click",function(){ el.importSettingsFile.click(); });
+  el.importSettingsFile.addEventListener("change",function(){
+    const f=el.importSettingsFile.files&&el.importSettingsFile.files[0]; if (!f) return;
+    const r=new FileReader();
+    r.onload=function(e){ importSettingsFromJsonText(String(e.target.result||"")); };
+    r.readAsText(f); el.importSettingsFile.value="";
   });
 
-  el.importSettingsFile.addEventListener("change", function () {
-    const file = el.importSettingsFile.files && el.importSettingsFile.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function (event) {
-      importSettingsFromJsonText(String(event.target.result || ""));
-    };
-    reader.readAsText(file);
-    el.importSettingsFile.value = "";
-  });
-
-  el.removeLogo.addEventListener("click", function () {
-    const confirmed = window.confirm("Remove the custom card-back logo and revert to the default logo?");
-    if (!confirmed) return;
-    applyLogo(DEFAULTS.logoUrl);
-    persistSettings();
-  });
-
-  el.removeHeaderLogo.addEventListener("click", function () {
-    const confirmed = window.confirm("Reset the header logo to the default BoothKit logo?");
-    if (!confirmed) return;
+  el.removeLogo.addEventListener("click",function(){ if (window.confirm("Remove the custom card-back logo and revert to the default logo?")) { applyLogo(DEFAULTS.logoUrl); persistSettings(); } });
+  el.removeHeaderLogo.addEventListener("click",function(){
+    if (!window.confirm("Reset the header logo to the default BoothKit logo?")) return;
     applyHeaderLogo(DEFAULTS.headerLogoUrl);
-    state.headerLogoHeight = DEFAULTS.headerLogoHeight;
-    state.headerLogoMaxWidth = DEFAULTS.headerLogoMaxWidth;
-    state.headerLogoOffsetY = DEFAULTS.headerLogoOffsetY;
-    applyHeaderLogoLayout();
-    updateSettingsUI();
-    persistSettings();
+    state.headerLogoHeight=DEFAULTS.headerLogoHeight; state.headerLogoMaxWidth=DEFAULTS.headerLogoMaxWidth; state.headerLogoOffsetY=DEFAULTS.headerLogoOffsetY;
+    applyHeaderLogoLayout(); updateSettingsUI(); persistSettings();
   });
+  el.removeBg.addEventListener("click",function(){ if (window.confirm("Remove the custom background image?")) { applyBackgroundImage(""); persistSettings(); } });
+  el.removeFont.addEventListener("click",function(){ if (window.confirm("Remove the custom font and return to the default font?")) { applyCustomFont("",""); persistSettings(); } });
 
-  el.removeBg.addEventListener("click", function () {
-    const confirmed = window.confirm("Remove the custom background image?");
-    if (!confirmed) return;
-    applyBackgroundImage("");
-    persistSettings();
-  });
+  window.addEventListener("resize",function(){ applyBoardLayout(); updateBoardShellMode(); });
 
-  el.removeFont.addEventListener("click", function () {
-    const confirmed = window.confirm("Remove the custom font and return to the default font?");
-    if (!confirmed) return;
-    applyCustomFont("", "");
-    persistSettings();
-  });
-
-  window.addEventListener("resize", function () {
-    applyBoardLayout();
-    updateBoardShellMode();
-  });
-
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Init
+  // ─────────────────────────────────────────────────────────────────────────────
   loadSettings();
   applyThemeColors(state.theme);
   applyLogo(state.logoUrl);
-  applyHeaderLogo(state.headerLogoUrl || DEFAULTS.headerLogoUrl);
+  applyHeaderLogo(state.headerLogoUrl||DEFAULTS.headerLogoUrl);
   applyHeaderLogoLayout();
   applyHudOffset();
   applyBoardOffset();
   applyBoardAreaSizing();
   applyBackgroundImage(state.bgImageUrl);
-  applyCustomFont(state.customFontDataUrl, state.customFontFileName);
+  applyCustomFont(state.customFontDataUrl,state.customFontFileName);
   updateSettingsUI();
   renderLeaderboard();
   updateAdminPinUI();
@@ -2993,7 +2050,7 @@ if (state.boardMinHeight > 0) {
   updateRoundPill();
   updateTitleForCurrentTarget();
 
-  prepareDeck(false).then(function () {
+  prepareDeck(false).then(function(){
     setTimerDisplay(state.roundTime);
     goIdle();
   });
