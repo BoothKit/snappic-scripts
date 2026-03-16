@@ -1046,6 +1046,33 @@ document.addEventListener("DOMContentLoaded", function () {
     const chosen = pool.slice(0, pairsNeeded);
     return shuffle(chosen.concat(chosen));
   }
+  
+  function preloadDeckImages(deck) {
+  if (!Array.isArray(deck) || !deck.length) return Promise.resolve();
+
+  const uniqueUrls = [...new Set(deck.filter(Boolean))];
+
+  return Promise.all(
+    uniqueUrls.map(function(src) {
+      return new Promise(function(resolve) {
+        const img = new Image();
+
+        function done() {
+          resolve();
+        }
+
+        img.onload = done;
+        img.onerror = done;
+
+        img.src = src;
+
+        if (img.complete) {
+          resolve();
+        }
+      });
+    })
+  );
+}
 
   function slugifyFontName(name) {
     return String(name || "Custom Font")
@@ -2022,12 +2049,22 @@ positionOverlaysOnBoard();
   }
 
   function animateBoardRefresh(nextShowAll) {
-    el.board.classList.add("fp-refresh-out");
-    setTimeout(function(){
-      renderBoard(nextShowAll,false); el.board.classList.remove("fp-refresh-out"); el.board.classList.add("fp-refresh-in");
-      setTimeout(function(){ el.board.classList.remove("fp-refresh-in"); },380);
-    },220);
-  }
+  const pendingDeck = state.deck ? state.deck.slice() : [];
+
+  el.board.classList.add("fp-refresh-out");
+
+  preloadDeckImages(pendingDeck).then(function() {
+    setTimeout(function() {
+      renderBoard(nextShowAll, false);
+      el.board.classList.remove("fp-refresh-out");
+      el.board.classList.add("fp-refresh-in");
+
+      setTimeout(function() {
+        el.board.classList.remove("fp-refresh-in");
+      }, 380);
+    }, 220);
+  });
+}
 
   function rerenderBoardForColumnChange() {
     applyBoardLayout();
