@@ -5,10 +5,7 @@ document.addEventListener("DOMContentLoaded", function () {
   (function earlyGalleryCheck() {
     const urlParams = new URLSearchParams(window.location.search);
     const galleryParam = urlParams.get("gallery") === "1";
-    const galleryStored = localStorage.getItem("fp_gallery_mode_v1") === "1";
-    if (!galleryParam && !galleryStored) return;
-    // Sync localStorage with URL param so both stay consistent
-    if (galleryParam) localStorage.setItem("fp_gallery_mode_v1", "1");
+    if (!galleryParam) return;
     // Add CSS class to <html> — activates the gallery-mode rules in the CSS file
     document.documentElement.classList.add("fp-gallery-mode");
     // Also inject a style block as a belt-and-braces fallback
@@ -2500,27 +2497,25 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function enterGalleryMode() {
-    localStorage.setItem(STORAGE_KEYS.galleryMode, "1");
+    // Set then immediately clear localStorage — the ?gallery=1 URL param
+    // is the source of truth for the shared link. Clearing here means this
+    // browser is never stuck; opening the plain URL again launches the game.
+    localStorage.removeItem(STORAGE_KEYS.galleryMode);
 
     clearTimeout(state.autoBackTimer);
     clearInterval(state.roundTimerId);
     stopIdleRefreshTimer();
 
-    // Redirect to the same page with ?gallery=1 appended so the URL is
-    // shareable — anyone who opens it lands in gallery mode on any device.
+    // Redirect to the same page with ?gallery=1 so the shared URL works on any device
     const url = new URL(window.location.href);
     url.searchParams.set("gallery", "1");
     window.location.replace(url.toString());
-    // Page is navigating — nothing below here runs.
   }
 
   function checkGalleryModeOnLoad() {
     const urlParams = new URLSearchParams(window.location.search);
-    const galleryParam = urlParams.get("gallery") === "1";
-    const galleryStored = localStorage.getItem(STORAGE_KEYS.galleryMode) === "1";
-    if (!galleryParam && !galleryStored) return false;
-    // earlyGalleryCheck already restored page styles — just block context menu
-    // and let the normal Snappic page render. No return button injected.
+    if (urlParams.get("gallery") !== "1") return false;
+    // earlyGalleryCheck already restored page styles — just remove context block
     document.removeEventListener("contextmenu", preventContext);
     return true;
   }
