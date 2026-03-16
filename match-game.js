@@ -1,4 +1,28 @@
 document.addEventListener("DOMContentLoaded", function () {
+    // Block only multi-touch gestures like pinch zoom
+  document.addEventListener("touchmove", function(e) {
+    if (e.touches && e.touches.length > 1) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  document.addEventListener("touchstart", function(e) {
+    if (e.touches && e.touches.length > 1) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  document.addEventListener("gesturestart", function(e) {
+    e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener("gesturechange", function(e) {
+    e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener("gestureend", function(e) {
+    e.preventDefault();
+  }, { passive: false });
   function preventContext(e) { e.preventDefault(); }
 
   // ── Gallery mode: check FIRST before building the game ──────────────────────
