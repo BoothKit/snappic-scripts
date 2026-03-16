@@ -1,5 +1,32 @@
 document.addEventListener("DOMContentLoaded", function () {
-  document.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+  function preventContext(e) { e.preventDefault(); }
+
+  // ── Gallery mode: check FIRST before building the game ──────────────────────
+  (function earlyGalleryCheck() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const galleryParam = urlParams.get("gallery") === "1";
+    const galleryStored = localStorage.getItem("fp_gallery_mode_v1") === "1";
+    if (!galleryParam && !galleryStored) return;
+    // Sync localStorage with URL param so both stay consistent
+    if (galleryParam) localStorage.setItem("fp_gallery_mode_v1", "1");
+    // Add CSS class to <html> — activates the gallery-mode rules in the CSS file
+    document.documentElement.classList.add("fp-gallery-mode");
+    // Also inject a style block as a belt-and-braces fallback
+    if (!document.getElementById("fp-gallery-restore-styles")) {
+      const s = document.createElement("style");
+      s.id = "fp-gallery-restore-styles";
+      s.textContent =
+        "html,body{overflow:auto !important;overscroll-behavior:auto !important;" +
+        "touch-action:auto !important;height:auto !important;" +
+        "scrollbar-width:auto !important;-ms-overflow-style:auto !important;}" +
+        "html::-webkit-scrollbar,body::-webkit-scrollbar{display:block !important;" +
+        "width:auto !important;height:auto !important;}" +
+        "#fp-game{display:none !important;}";
+      document.head.appendChild(s);
+    }
+  })();
+
+  document.addEventListener("contextmenu", preventContext);
 
   const host = document.querySelector("#content");
   const galleryImgs = [...document.querySelectorAll("#gallery .grid-item img")];
@@ -7,7 +34,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const STORAGE_KEYS = {
     settings: "fp_settings_v13",
-    leaderboard: "fp_lb_v13"
+    leaderboard: "fp_lb_v13",
+    galleryMode: "fp_gallery_mode_v1"
   };
 
   const CARD_COUNTS = [6, 8, 10, 12, 16, 20, 30];
@@ -567,6 +595,15 @@ document.addEventListener("DOMContentLoaded", function () {
                 '</div>' +
               '</div>' +
 
+              // ── Gallery Mode ──
+              '<div class="fp-admin-section fp-admin-section-full">' +
+                '<h3>Gallery Mode</h3>' +
+                '<p class="fp-admin-sub" style="margin:0 0 14px">Switch to the normal photo gallery so clients can browse photos after the event. A floating button lets you return to game mode using the same PIN.</p>' +
+                '<div class="fp-admin-actions">' +
+                  '<button id="fp-enter-gallery" type="button" class="fp-admin-secondary">View Gallery</button>' +
+                '</div>' +
+              '</div>' +
+
               // ── Security ──
               '<div class="fp-admin-section">' +
                 '<h3>Security</h3>' +
@@ -694,7 +731,8 @@ document.addEventListener("DOMContentLoaded", function () {
     newPin: app.querySelector("#fp-new-pin"),
     confirmPin: app.querySelector("#fp-confirm-pin"),
     savePin: app.querySelector("#fp-save-pin"),
-    pinStatus: app.querySelector("#fp-pin-status")
+    pinStatus: app.querySelector("#fp-pin-status"),
+    enterGallery: app.querySelector("#fp-enter-gallery")
   };
 
   if (el.winTargetOverrideNote) {
@@ -2019,8 +2057,306 @@ document.addEventListener("DOMContentLoaded", function () {
   window.addEventListener("resize",function(){ applyBoardLayout(); updateBoardShellMode(); });
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // Gallery Mode — revert page to normal browsing experience
+  // ─────────────────────────────────────────────────────────────────────────────
+  function restoreNormalPage() {
+    // Add CSS class to <html> — activates gallery-mode rules in the CSS file
+    document.documentElement.classList.add("fp-gallery-mode");
+    // Idempotent style block fallback — earlyGalleryCheck may have already done this
+    if (document.getElementById("fp-gallery-restore-styles")) return;
+    const s = document.createElement("style");
+    s.id = "fp-gallery-restore-styles";
+    s.textContent =
+      "html,body{overflow:auto !important;overscroll-behavior:auto !important;" +
+      "touch-action:auto !important;height:auto !important;" +
+      "scrollbar-width:auto !important;-ms-overflow-style:auto !important;}" +
+      "html::-webkit-scrollbar,body::-webkit-scrollbar{display:block !important;" +
+      "width:auto !important;height:auto !important;}" +
+      "#fp-game{display:none !important;}";
+    document.head.appendChild(s);
+  }
+
+  function enterGalleryMode() {
+    localStorage.setItem(STORAGE_KEYS.galleryMode, "1");
+
+    clearTimeout(state.autoBackTimer);
+    clearInterval(state.roundTimerId);
+    stopIdleRefreshTimer();
+
+    // Redirect to the same page with ?gallery=1 appended so the URL is
+    // shareable — anyone who opens it lands in gallery mode on any device.
+    const url = new URL(window.location.href);
+    url.searchParams.set("gallery", "1");
+    window.location.replace(url.toString());
+    // Page is navigating — nothing below here runs.
+  }
+
+  function injectGalleryReturnButton() {
+    // Don't double-inject
+    if (document.getElementById("fp-gallery-return-wrap")) return;
+
+    const style = document.createElement("style");
+    style.id = "fp-gallery-return-styles";
+    style.textContent = `
+      #fp-gallery-return-wrap {
+        position: fixed;
+        bottom: 28px;
+        right: 28px;
+        z-index: 999999;
+        font-family: Arial, sans-serif;
+      }
+      #fp-gallery-return-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px 22px;
+        border-radius: 999px;
+        border: none;
+        background: #1C1F27;
+        color: #fff;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 8px 32px rgba(0,0,0,.38);
+        letter-spacing: .04em;
+        transition: transform .15s ease, box-shadow .15s ease;
+      }
+      #fp-gallery-return-btn:hover {
+        transform: scale(1.04);
+        box-shadow: 0 12px 40px rgba(0,0,0,.46);
+      }
+      #fp-gallery-return-btn:active { transform: scale(.98); }
+
+      /* PIN modal */
+      #fp-gallery-pin-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 9999999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(0,0,0,.72);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        font-family: Arial, sans-serif;
+      }
+      #fp-gallery-pin-modal.hidden { display: none; }
+      #fp-gallery-pin-card {
+        background: #1C1F27;
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: 28px;
+        padding: 32px 28px;
+        width: min(92vw, 380px);
+        box-shadow: 0 24px 80px rgba(0,0,0,.5);
+        color: #fff;
+        text-align: center;
+      }
+      #fp-gallery-pin-title {
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        margin: 0 0 8px;
+      }
+      #fp-gallery-pin-sub {
+        font-size: 14px;
+        opacity: .72;
+        margin: 0 0 20px;
+        line-height: 1.45;
+      }
+      #fp-gallery-pin-display {
+        padding: 14px 18px;
+        border-radius: 14px;
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.14);
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: .18em;
+        min-height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 16px;
+      }
+      #fp-gallery-pin-display.empty { font-size: 15px; opacity: .5; letter-spacing: .04em; }
+      #fp-gallery-pin-keys {
+        display: grid;
+        grid-template-columns: repeat(3,1fr);
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .fp-gallery-pin-key {
+        padding: 14px 8px;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,.14);
+        background: rgba(255,255,255,.08);
+        color: #fff;
+        font-size: 18px;
+        font-weight: 800;
+        text-align: center;
+        cursor: pointer;
+      }
+      #fp-gallery-pin-error {
+        font-size: 13px;
+        color: #ff6b6b;
+        min-height: 18px;
+        margin-bottom: 12px;
+      }
+      #fp-gallery-pin-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+      }
+      #fp-gallery-pin-submit {
+        padding: 13px 28px;
+        border-radius: 999px;
+        border: none;
+        background: #fff;
+        color: #111;
+        font-size: 16px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      #fp-gallery-pin-cancel {
+        padding: 13px 22px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,.18);
+        background: rgba(255,255,255,.08);
+        color: #fff;
+        font-size: 16px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Floating button
+    const wrap = document.createElement("div");
+    wrap.id = "fp-gallery-return-wrap";
+    wrap.innerHTML =
+      '<button id="fp-gallery-return-btn" type="button">🎮 Return to Game</button>' +
+      '<div id="fp-gallery-pin-modal" class="hidden">' +
+        '<div id="fp-gallery-pin-card">' +
+          '<div id="fp-gallery-pin-title">Return to Game</div>' +
+          '<p id="fp-gallery-pin-sub">Enter the admin PIN to switch back to game mode.</p>' +
+          '<div id="fp-gallery-pin-display" class="empty">ENTER PIN</div>' +
+          '<div id="fp-gallery-pin-keys"></div>' +
+          '<div id="fp-gallery-pin-error"></div>' +
+          '<div id="fp-gallery-pin-actions">' +
+            '<button id="fp-gallery-pin-submit" type="button">Unlock</button>' +
+            '<button id="fp-gallery-pin-cancel" type="button">Cancel</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(wrap);
+
+    // PIN state
+    let pinValue = "";
+
+    function updatePinDisplay() {
+      const disp = document.getElementById("fp-gallery-pin-display");
+      if (!disp) return;
+      if (!pinValue.length) {
+        disp.textContent = "ENTER PIN";
+        disp.classList.add("empty");
+      } else {
+        disp.textContent = "• ".repeat(pinValue.length).trim();
+        disp.classList.remove("empty");
+      }
+    }
+
+    function buildPinKeys() {
+      const container = document.getElementById("fp-gallery-pin-keys");
+      if (!container) return;
+      container.innerHTML = "";
+      ["1","2","3","4","5","6","7","8","9","CLEAR","0","←"].forEach(function(key) {
+        const b = document.createElement("div");
+        b.className = "fp-gallery-pin-key";
+        b.textContent = key === "←" ? "⌫" : key;
+        b.onclick = function() {
+          if (key === "CLEAR") pinValue = "";
+          else if (key === "←") pinValue = pinValue.slice(0,-1);
+          else if (/^\d$/.test(key) && pinValue.length < 8) pinValue += key;
+          updatePinDisplay();
+          const err = document.getElementById("fp-gallery-pin-error");
+          if (err) err.textContent = "";
+        };
+        container.appendChild(b);
+      });
+    }
+
+    function openPinModal() {
+      pinValue = "";
+      updatePinDisplay();
+      buildPinKeys();
+      const modal = document.getElementById("fp-gallery-pin-modal");
+      if (modal) modal.classList.remove("hidden");
+      const err = document.getElementById("fp-gallery-pin-error");
+      if (err) err.textContent = "";
+    }
+
+    function closePinModal() {
+      const modal = document.getElementById("fp-gallery-pin-modal");
+      if (modal) modal.classList.add("hidden");
+      pinValue = "";
+    }
+
+    function attemptReturnToGame() {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.settings) || "null");
+      const currentPin = (saved && saved.adminPin) ? saved.adminPin : DEFAULTS.adminPin;
+      if (pinValue === currentPin) {
+        // Clear gallery flag from both localStorage and URL, then reload
+        localStorage.removeItem(STORAGE_KEYS.galleryMode);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("gallery");
+        window.location.replace(url.toString());
+      } else {
+        pinValue = "";
+        updatePinDisplay();
+        const err = document.getElementById("fp-gallery-pin-error");
+        if (err) err.textContent = "Incorrect PIN. Try again.";
+      }
+    }
+
+    document.getElementById("fp-gallery-return-btn").onclick = openPinModal;
+    document.getElementById("fp-gallery-pin-submit").onclick = attemptReturnToGame;
+    document.getElementById("fp-gallery-pin-cancel").onclick = closePinModal;
+
+    // Close modal on backdrop click
+    document.getElementById("fp-gallery-pin-modal").addEventListener("click", function(e) {
+      if (e.target === this) closePinModal();
+    });
+  }
+
+  function checkGalleryModeOnLoad() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const galleryParam = urlParams.get("gallery") === "1";
+    const galleryStored = localStorage.getItem(STORAGE_KEYS.galleryMode) === "1";
+    if (!galleryParam && !galleryStored) return false;
+    // earlyGalleryCheck at the top already injected restore styles.
+    // Just remove context block + show the return button.
+    document.removeEventListener("contextmenu", preventContext);
+    injectGalleryReturnButton();
+    return true;
+  }
+
+  // Wire up the "View Gallery" button in admin
+  if (el.enterGallery) {
+    el.enterGallery.addEventListener("click", function() {
+      if (window.confirm("Switch to Gallery Mode?\n\nThe game will be hidden and the normal photo gallery will be shown. Visitors can browse photos freely.\n\nTo return to game mode, use the floating button on the page (PIN required).")) {
+        closeAdmin();
+        enterGalleryMode();
+      }
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Init
   // ─────────────────────────────────────────────────────────────────────────────
+  // Check if we should stay in gallery mode instead of launching game
+  if (checkGalleryModeOnLoad()) return;
+
   loadSettings();
   applyThemeColors(state.theme);
   applyLogo(state.logoUrl);
