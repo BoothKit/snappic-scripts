@@ -58,6 +58,8 @@ document.addEventListener("DOMContentLoaded", function () {
     startCountdown: 3,
     roundTime: 20,
     idleRefreshSeconds: 30,
+    popupTimingSecs: 5,
+    roundTransitionSecs: 2.4,
     cardCount: 12,
     columns: 4,
     boardWidthPercent: 100,
@@ -190,8 +192,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       /* ── Status flash ── */
       #fp-status-flash {
-        position: fixed; left: 50%; top: 50%;
-        transform: translate(-50%,-50%) scale(.72);
+        position: fixed;
         z-index: 90;
         min-width: min(86vw, 420px); max-width: min(90vw, 520px);
         padding: 20px 26px; border-radius: 28px;
@@ -200,6 +201,8 @@ document.addEventListener("DOMContentLoaded", function () {
         box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 26px rgba(255,255,255,.12);
         text-align: center; opacity: 0; pointer-events: none;
         transition: opacity .22s ease, transform .22s ease; display: none;
+        /* left/top set by JS to board center; transform handles scale + centering */
+        transform: translate(-50%,-50%) scale(.72);
       }
       #fp-status-flash.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
       #fp-status-flash.hidden { display: none; }
@@ -210,6 +213,22 @@ document.addEventListener("DOMContentLoaded", function () {
       #fp-status-flash .fp-status-line-2 {
         display: block; margin-top: 8px; font-size: 15px; font-weight: 800;
         letter-spacing: .28em; text-transform: uppercase; opacity: .84; line-height: 1.1;
+      }
+
+      @keyframes fpCountdownPulse {
+        0%   { transform: scale(1.15); opacity: 0; }
+        15%  { transform: scale(1);    opacity: 1; }
+        80%  { transform: scale(1);    opacity: 1; }
+        100% { transform: scale(.82);  opacity: 0; }
+      }
+      /* fp-countdown-inner handles translateXY positioning (set by JS) */
+      /* fp-countdown-pulse handles scale/opacity animation only */
+      .fp-countdown-inner { display: block; }
+      .fp-countdown-pulse {
+        display: block;
+      }
+      .fp-countdown-pulse.fp-tick {
+        animation: fpCountdownPulse .85s ease forwards;
       }
 
       @keyframes fpShuffleShake {
@@ -267,25 +286,80 @@ document.addEventListener("DOMContentLoaded", function () {
         box-shadow: 0 28px 80px rgba(0,0,0,.34) !important;
       }
 
-      /* ── Frosted glass admin during slider drag ── */
+      /* ── Slider preview: fade out admin panel, show confirm bar ── */
       #fp-admin-modal.fp-slider-active #fp-admin-backdrop {
-        background: rgba(0,0,0,.18) !important;
-        backdrop-filter: blur(2px) !important;
-        -webkit-backdrop-filter: blur(2px) !important;
-        transition: background .2s ease, backdrop-filter .2s ease;
+        background: rgba(0,0,0,.08) !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        transition: background .3s ease, backdrop-filter .3s ease;
       }
       #fp-admin-modal.fp-slider-active #fp-admin-panel {
-        background: rgba(20,22,28,.55) !important;
-        backdrop-filter: blur(22px) saturate(160%) !important;
-        -webkit-backdrop-filter: blur(22px) saturate(160%) !important;
-        border-color: rgba(255,255,255,.22) !important;
-        transition: background .2s ease, backdrop-filter .2s ease;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        transition: opacity .3s ease;
       }
       #fp-admin-modal #fp-admin-backdrop {
-        transition: background .35s ease, backdrop-filter .35s ease;
+        transition: background .3s ease, backdrop-filter .3s ease;
       }
       #fp-admin-modal #fp-admin-panel {
-        transition: background .35s ease, backdrop-filter .35s ease;
+        opacity: 1;
+        pointer-events: auto;
+        transition: opacity .3s ease;
+      }
+      /* Floating confirm bar */
+      #fp-slider-confirm-bar {
+        position: fixed;
+        bottom: 32px;
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        z-index: 999999;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 20px;
+        border-radius: 999px;
+        background: rgba(20,22,28,.96);
+        border: 1px solid rgba(255,255,255,.18);
+        box-shadow: 0 16px 48px rgba(0,0,0,.55);
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        font-weight: 700;
+        color: #fff;
+        letter-spacing: .04em;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .25s ease, transform .25s ease;
+      }
+      #fp-slider-confirm-bar.show {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateX(-50%) translateY(0);
+      }
+      #fp-slider-confirm-bar .fp-scb-label {
+        opacity: .7;
+        white-space: nowrap;
+      }
+      #fp-slider-confirm-apply {
+        padding: 10px 20px;
+        border-radius: 999px;
+        border: none;
+        background: #fff;
+        color: #111;
+        font-size: 14px;
+        font-weight: 800;
+        cursor: pointer;
+        letter-spacing: .04em;
+      }
+      #fp-slider-confirm-cancel {
+        padding: 10px 18px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,.22);
+        background: rgba(255,255,255,.08);
+        color: #fff;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        letter-spacing: .04em;
       }
 
       /* ── Slider value readout style ── */
@@ -441,20 +515,25 @@ document.addEventListener("DOMContentLoaded", function () {
                 '</div>' +
                 '<div id="fp-win-target-override-note" class="fp-admin-note">More Matches Required overrides the Win Target setting and uses round-based targets automatically.</div>' +
 
-                '<div class="fp-admin-row-3">' +
-                  '<div>' +
-                    '<label class="fp-admin-label" for="fp-setting-countdown">Countdown</label>' +
-                    '<input id="fp-setting-countdown" class="fp-admin-number" type="number" min="0" max="10" step="1">' +
-                  '</div>' +
-                  '<div>' +
-                    '<label class="fp-admin-label" for="fp-setting-timer">Base Timer</label>' +
-                    '<input id="fp-setting-timer" class="fp-admin-number" type="number" min="5" max="120" step="1">' +
-                  '</div>' +
-                  '<div>' +
-                    '<label class="fp-admin-label" for="fp-setting-idle-refresh">Idle Refresh (sec)</label>' +
-                    '<input id="fp-setting-idle-refresh" class="fp-admin-number" type="number" min="0" max="600" step="1">' +
-                  '</div>' +
-                '</div>' +
+                '<label class="fp-admin-label fp-admin-label-top" for="fp-setting-countdown">Countdown (sec)</label>' +
+                '<input id="fp-setting-countdown" class="fp-admin-number" type="range" min="0" max="10" step="1">' +
+                '<div id="fp-countdown-value" class="fp-admin-note">3s</div>' +
+
+                '<label class="fp-admin-label fp-admin-label-top" for="fp-setting-timer">Base Timer (sec)</label>' +
+                '<input id="fp-setting-timer" class="fp-admin-number" type="range" min="5" max="120" step="1">' +
+                '<div id="fp-timer-value" class="fp-admin-note">20s</div>' +
+
+                '<label class="fp-admin-label fp-admin-label-top" for="fp-setting-idle-refresh">Idle Refresh (sec)</label>' +
+                '<input id="fp-setting-idle-refresh" class="fp-admin-number" type="range" min="0" max="600" step="5">' +
+                '<div id="fp-idle-refresh-value" class="fp-admin-note">30s</div>' +
+
+                '<label class="fp-admin-label fp-admin-label-top" for="fp-setting-round-transition">Round Popup Duration (sec)</label>' +
+                '<input id="fp-setting-round-transition" class="fp-admin-number" type="range" min="1" max="8" step="1">' +
+                '<div id="fp-round-transition-value" class="fp-admin-note">2.4s</div>' +
+
+                '<label class="fp-admin-label fp-admin-label-top" for="fp-setting-popup-timing">Result Popup Duration (sec)</label>' +
+                '<input id="fp-setting-popup-timing" class="fp-admin-number" type="range" min="2" max="15" step="1">' +
+                '<div id="fp-popup-timing-value" class="fp-admin-note">5s</div>' +
 
                 '<label class="fp-admin-label fp-admin-label-top">Columns</label>' +
                 '<div id="fp-column-counts" class="fp-chip-group">' +
@@ -679,8 +758,15 @@ document.addEventListener("DOMContentLoaded", function () {
     roundButtons: [...app.querySelectorAll("[data-rounds]")],
     difficultyButtons: [...app.querySelectorAll("[data-difficulty]")],
     countdownInput: app.querySelector("#fp-setting-countdown"),
+    countdownValue: app.querySelector("#fp-countdown-value"),
     roundTimerInput: app.querySelector("#fp-setting-timer"),
+    roundTimerValue: app.querySelector("#fp-timer-value"),
     idleRefreshInput: app.querySelector("#fp-setting-idle-refresh"),
+    idleRefreshValue: app.querySelector("#fp-idle-refresh-value"),
+    roundTransitionInput: app.querySelector("#fp-setting-round-transition"),
+    roundTransitionValue: app.querySelector("#fp-round-transition-value"),
+    popupTimingInput: app.querySelector("#fp-setting-popup-timing"),
+    popupTimingValue: app.querySelector("#fp-popup-timing-value"),
     idlePreviewInput: app.querySelector("#fp-setting-idle-preview"),
     startPreviewInput: app.querySelector("#fp-setting-start-preview"),
     showCursorInput: app.querySelector("#fp-setting-show-cursor"),
@@ -743,24 +829,84 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Frosted glass on slider drag
+  // Slider preview — fade admin, show floating confirm bar
   // ─────────────────────────────────────────────────────────────────────────────
-  function setSliderActive(active) {
-    el.adminModal.classList.toggle("fp-slider-active", active);
+
+  // Inject confirm bar into DOM once
+  (function buildConfirmBar() {
+    if (document.getElementById("fp-slider-confirm-bar")) return;
+    const bar = document.createElement("div");
+    bar.id = "fp-slider-confirm-bar";
+    bar.innerHTML =
+      '<span class="fp-scb-label">Looking good? Apply this change?</span>' +
+      '<button id="fp-slider-confirm-apply" type="button">Apply</button>' +
+      '<button id="fp-slider-confirm-cancel" type="button">Cancel</button>';
+    document.body.appendChild(bar);
+  })();
+
+  // Snapshot of state before a slider drag starts so we can revert on cancel
+  let sliderSnapshot = null;
+  let activeSliderInput = null;
+
+  function takeSliderSnapshot() {
+    sliderSnapshot = {
+      boardWidthPercent: state.boardWidthPercent,
+      boardMinHeight: state.boardMinHeight,
+      boardGap: state.boardGap,
+      hudOffsetY: state.hudOffsetY,
+      boardOffsetY: state.boardOffsetY,
+      headerLogoHeight: state.headerLogoHeight,
+      headerLogoMaxWidth: state.headerLogoMaxWidth,
+      headerLogoOffsetY: state.headerLogoOffsetY
+    };
   }
+
+  function revertToSnapshot() {
+    if (!sliderSnapshot) return;
+    Object.assign(state, sliderSnapshot);
+    applyBoardAreaSizing();
+    applyHudOffset();
+    applyBoardOffset();
+    applyHeaderLogoLayout();
+    updateSettingsUI();
+    rerenderBoardForColumnChange();
+  }
+
+  function setSliderActive(active, input) {
+    el.adminModal.classList.toggle("fp-slider-active", active);
+    const bar = document.getElementById("fp-slider-confirm-bar");
+    if (!bar) return;
+    if (active) {
+      bar.classList.add("show");
+      activeSliderInput = input || null;
+    } else {
+      bar.classList.remove("show");
+      activeSliderInput = null;
+    }
+  }
+
+  // Wire up confirm/cancel buttons
+  document.addEventListener("click", function(e) {
+    if (e.target && e.target.id === "fp-slider-confirm-apply") {
+      persistSettings();
+      setSliderActive(false);
+      sliderSnapshot = null;
+    }
+    if (e.target && e.target.id === "fp-slider-confirm-cancel") {
+      revertToSnapshot();
+      setSliderActive(false);
+      sliderSnapshot = null;
+    }
+  });
 
   function bindSliderFrost(input) {
     if (!input) return;
-    input.addEventListener("mousedown", function() { setSliderActive(true); });
-    input.addEventListener("touchstart", function() { setSliderActive(true); }, { passive: true });
-    input.addEventListener("mouseup", function() { setSliderActive(false); });
-    input.addEventListener("touchend", function() { setSliderActive(false); });
-    input.addEventListener("mouseleave", function() {
-      // only clear if no button held
-      if (!this.matches(":active")) setSliderActive(false);
-    });
-    document.addEventListener("mouseup", function() { setSliderActive(false); });
-    document.addEventListener("touchend", function() { setSliderActive(false); }, { passive: true });
+    function onStart() {
+      takeSliderSnapshot();
+      setSliderActive(true, input);
+    }
+    input.addEventListener("mousedown", onStart);
+    input.addEventListener("touchstart", onStart, { passive: true });
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1084,6 +1230,8 @@ document.addEventListener("DOMContentLoaded", function () {
       settings: {
         winTarget: state.winTarget, startCountdown: state.startCountdown,
         roundTime: state.roundTime, idleRefreshSeconds: state.idleRefreshSeconds,
+        popupTimingSecs: state.popupTimingSecs,
+        roundTransitionSecs: state.roundTransitionSecs,
         cardCount: state.cardCount, columns: state.columns,
         boardWidthPercent: state.boardWidthPercent, boardMinHeight: state.boardMinHeight,
         boardGap: state.boardGap, idlePreview: state.idlePreview,
@@ -1109,6 +1257,8 @@ document.addEventListener("DOMContentLoaded", function () {
     if (typeof saved.startCountdown==="number") state.startCountdown=Math.max(0,Math.min(10,saved.startCountdown));
     if (typeof saved.roundTime==="number") state.roundTime=Math.max(5,Math.min(120,saved.roundTime));
     if (typeof saved.idleRefreshSeconds==="number") state.idleRefreshSeconds=Math.max(0,Math.min(600,saved.idleRefreshSeconds));
+    if (typeof saved.popupTimingSecs==="number") state.popupTimingSecs=Math.max(2,Math.min(15,saved.popupTimingSecs));
+    if (typeof saved.roundTransitionSecs==="number") state.roundTransitionSecs=Math.max(1,Math.min(8,saved.roundTransitionSecs));
     if (CARD_COUNTS.indexOf(saved.cardCount)>-1) state.cardCount=saved.cardCount;
     state.columns = COLUMN_OPTIONS.indexOf(saved.columns)>-1 ? saved.columns : DEFAULTS.columns;
     state.boardWidthPercent = typeof saved.boardWidthPercent==="number" ? Math.max(60,Math.min(100,saved.boardWidthPercent)) : DEFAULTS.boardWidthPercent;
@@ -1236,8 +1386,15 @@ document.addEventListener("DOMContentLoaded", function () {
     el.difficultyButtons.forEach(function(b){ b.classList.toggle("active", String(state.roundDifficulty)===b.getAttribute("data-difficulty")); });
 
     el.countdownInput.value=state.startCountdown;
+    if (el.countdownValue) el.countdownValue.textContent=state.startCountdown+"s";
     el.roundTimerInput.value=state.roundTime;
+    if (el.roundTimerValue) el.roundTimerValue.textContent=state.roundTime+"s";
     el.idleRefreshInput.value=state.idleRefreshSeconds;
+    if (el.idleRefreshValue) el.idleRefreshValue.textContent=state.idleRefreshSeconds+"s";
+    if (el.roundTransitionInput) el.roundTransitionInput.value=state.roundTransitionSecs;
+    if (el.roundTransitionValue) el.roundTransitionValue.textContent=state.roundTransitionSecs+"s";
+    if (el.popupTimingInput) el.popupTimingInput.value=state.popupTimingSecs;
+    if (el.popupTimingValue) el.popupTimingValue.textContent=state.popupTimingSecs+"s";
     el.idlePreviewInput.checked=state.idlePreview;
     el.startPreviewInput.checked=state.startPreview;
     el.showCursorInput.checked=state.showCursor;
@@ -1289,6 +1446,9 @@ document.addEventListener("DOMContentLoaded", function () {
     el.adminPin.value="";
     updateAdminPinUI();
     setSliderActive(false);
+    sliderSnapshot = null;
+    const bar = document.getElementById("fp-slider-confirm-bar");
+    if (bar) bar.classList.remove("show");
   }
 
   function unlockAdmin() {
@@ -1477,9 +1637,21 @@ document.addEventListener("DOMContentLoaded", function () {
   // ─────────────────────────────────────────────────────────────────────────────
   // Position countdown + round transition over the board shell, not full viewport
   // ─────────────────────────────────────────────────────────────────────────────
+  let _cachedBoardRect = null;
+
+  function cacheBoardRect() {
+    if (!el.boardShell) return;
+    // Measure only when board is not mid-animation
+    const r = el.boardShell.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) _cachedBoardRect = r;
+  }
+
   function positionOverlaysOnBoard() {
     if (!el.boardShell) return;
-    const r = el.boardShell.getBoundingClientRect();
+    // Use cached rect if available (avoids measuring during board scale/blur animations)
+    const r = (_cachedBoardRect && _cachedBoardRect.width > 0)
+      ? _cachedBoardRect
+      : el.boardShell.getBoundingClientRect();
     const vph = window.innerHeight;
     const vpw = window.innerWidth;
     // How far the board center is from the viewport center
@@ -1491,17 +1663,14 @@ document.addEventListener("DOMContentLoaded", function () {
     // Only shift the text content to the board center using a wrapper span.
     if (el.countdown) {
       el.countdown.style.transform = "";
-      // Wrap the text node in a span if not already done
-      if (!el.countdown.querySelector(".fp-countdown-inner")) {
-        const inner = document.createElement("span");
-        inner.className = "fp-countdown-inner";
-        inner.style.cssText = "display:block;transition:transform .1s ease;";
-        inner.textContent = el.countdown.textContent;
-        el.countdown.textContent = "";
-        el.countdown.appendChild(inner);
-      }
       const inner = el.countdown.querySelector(".fp-countdown-inner");
       if (inner) inner.style.transform = tx;
+    }
+
+    // Status flash (miss/reshuffle popup): centered on board
+    if (el.statusFlash) {
+      el.statusFlash.style.left = (vpw / 2 + shiftX) + "px";
+      el.statusFlash.style.top  = (vph / 2 + shiftY) + "px";
     }
 
     // Round transition: full-page backdrop, card shifted to board center
@@ -1600,6 +1769,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function showStatusFlash(done) {
     if (!el.statusFlash) { if (typeof done==="function") done(); return; }
+    positionOverlaysOnBoard();
     el.statusFlash.innerHTML='<span class="fp-status-line-1">MISS!</span><span class="fp-status-line-2">RESHUFFLING...</span>';
     el.statusFlash.classList.remove("hidden"); el.statusFlash.style.display="block";
     requestAnimationFrame(function(){ el.statusFlash.classList.add("show"); });
@@ -1677,20 +1847,21 @@ document.addEventListener("DOMContentLoaded", function () {
     el.keys.style.display="none"; el.name.style.display="none";
     el.start.classList.add("hidden"); el.cancel.classList.add("hidden"); el.replay.classList.remove("hidden");
     renderLeaderboard(); updateBoardShellMode();
-    state.autoBackTimer=setTimeout(function(){ goIdle(); }, typeof delayMs==="number" ? delayMs : 5000);
+    state.autoBackTimer=setTimeout(function(){ goIdle(); }, typeof delayMs==="number" ? delayMs : state.popupTimingSecs * 1000);
   }
 
   function showRoundTransition(title,copy,done) {
     clearTimeout(state.autoBackTimer);
-    positionOverlaysOnBoard();
     el.roundTransitionKicker.textContent=isSurvivalMode()?"Next Round":"Get Ready";
     el.roundTransitionTitle.textContent=title; el.roundTransitionCopy.textContent=copy;
+    // Remove hidden first so the element has dimensions for positioning
     el.roundTransition.classList.remove("hidden");
+    positionOverlaysOnBoard();
     requestAnimationFrame(function(){ el.roundTransition.classList.add("show"); });
     setTimeout(function(){
       el.roundTransition.classList.remove("show");
       setTimeout(function(){ el.roundTransition.classList.add("hidden"); if (typeof done==="function") done(); },280);
-    },2400);
+    }, state.roundTransitionSecs * 1000);
   }
 
   function getSurvivalTotalCompletedTime() {
@@ -1707,21 +1878,21 @@ document.addEventListener("DOMContentLoaded", function () {
     const target = state.activeWinTarget;
     const winTitle = target > 1 ? "All Matches Found!" : "You Found a Match!";
     const winCopy = "Target: "+getWinTargetLabelFor(state.deck.length,state.currentRound)+". Time: "+elapsed.toFixed(2)+"s";
-    showResult(winTitle, winCopy, 5000);
+    showResult(winTitle, winCopy, state.popupTimingSecs * 1000);
   }
 
   function finishSurvivalModeSuccess(totalTime) {
     if (state.playerName) saveScore({n:state.playerName,t:totalTime,r:Number(state.currentRound),mode:"survival",category:getCurrentLeaderboardCategory(),difficulty:state.roundDifficulty,ts:Date.now()});
     state.playerName=""; updateNameUI();
-    showResult("Survival Complete!","Completed "+state.currentRound+" rounds in "+totalTime.toFixed(2)+"s",6000);
+    showResult("Survival Complete!","Completed "+state.currentRound+" rounds in "+totalTime.toFixed(2)+"s", state.popupTimingSecs * 1000);
   }
 
   function finishSurvivalModeLoss() {
     const cr=getHighestCompletedRound(), tt=getSurvivalTotalCompletedTime();
     if (state.playerName&&cr>0) saveScore({n:state.playerName,t:tt,r:cr,mode:"survival",category:getCurrentLeaderboardCategory(),difficulty:state.roundDifficulty,ts:Date.now()});
     state.playerName=""; updateNameUI();
-    if (cr>0) showResult("Round Over","You reached round "+cr+" with a total time of "+tt.toFixed(2)+"s",6000);
-    else showResult("Time's Up!","You did not complete round 1. Starting over shortly...",5000);
+    if (cr>0) showResult("Round Over","You reached round "+cr+" with a total time of "+tt.toFixed(2)+"s", state.popupTimingSecs * 1000);
+    else showResult("Time's Up!","You did not complete round 1. Starting over shortly...", state.popupTimingSecs * 1000);
   }
 
   function getDifficultyDescription() {
@@ -1748,6 +1919,8 @@ document.addEventListener("DOMContentLoaded", function () {
     finishSurvivalModeSuccess(getSurvivalTotalCompletedTime());
   }
 
+  function advanceToNextRound() { state.currentRound+=1; startConfiguredRound(); }
+
   function loseRound() {
     clearInterval(state.roundTimerId); state.gameActive=false;
     if (!isSurvivalMode()) { state.playerName=""; updateNameUI(); showResult("Time's Up!","Starting over shortly..."); return; }
@@ -1767,11 +1940,35 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function showCountdownValue(v) {
-    positionOverlaysOnBoard();
-    // Set text on the inner span if it exists, otherwise on the element directly
-    const inner = el.countdown.querySelector(".fp-countdown-inner");
-    if (inner) inner.textContent = v; else el.countdown.textContent = v;
     el.countdown.classList.remove("hidden");
+
+    // Build two-layer structure if not already present:
+    // #fp-countdown > .fp-countdown-inner (translate, set by JS)
+    //               > .fp-countdown-pulse (scale animation only)
+    //               > text
+    if (!el.countdown.querySelector(".fp-countdown-inner")) {
+      el.countdown.textContent = "";
+      const outer = document.createElement("span");
+      outer.className = "fp-countdown-inner";
+      const pulse = document.createElement("span");
+      pulse.className = "fp-countdown-pulse";
+      pulse.textContent = v;
+      outer.appendChild(pulse);
+      el.countdown.appendChild(outer);
+    }
+
+    // Position first — sets translateX/Y on .fp-countdown-inner
+    positionOverlaysOnBoard();
+
+    // Update text and restart pulse on .fp-countdown-pulse
+    const pulse = el.countdown.querySelector(".fp-countdown-pulse");
+    if (pulse) {
+      pulse.textContent = v;
+      pulse.classList.remove("fp-tick");
+      void pulse.offsetWidth;
+      pulse.classList.add("fp-tick");
+    }
+
     requestAnimationFrame(function(){ requestAnimationFrame(function(){ el.countdown.classList.add("show"); }); });
   }
 
@@ -1784,6 +1981,7 @@ document.addEventListener("DOMContentLoaded", function () {
     el.roundTransition.classList.remove("show"); el.roundTransition.classList.add("hidden");
     updateNameUI(); updateRoundPill(); updateTitleForCurrentTarget();
     if (state.deck.length) renderBoard(state.idlePreview,false);
+    cacheBoardRect();
     el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboard(); startIdleRefreshTimer();
   }
 
@@ -1793,10 +1991,12 @@ document.addEventListener("DOMContentLoaded", function () {
     showCountdownValue(v);
     const id=setInterval(function(){
       v-=1;
-      if (v<=0) { clearInterval(id); hideCountdown(false); setTimeout(function(){ done(); },280); }
-      else {
-        const inner = el.countdown.querySelector(".fp-countdown-inner");
-        if (inner) inner.textContent = v; else el.countdown.textContent = v;
+      if (v<=0) {
+        clearInterval(id);
+        hideCountdown(false);
+        setTimeout(function(){ done(); },280);
+      } else {
+        showCountdownValue(v);
       }
     },1000);
   }
@@ -1816,15 +2016,38 @@ document.addEventListener("DOMContentLoaded", function () {
     const rc=getRoundConfig(state.currentRound);
     state.activeRoundTime=rc.timer; state.activeCardCount=rc.cardCount;
     state.matchedPairs=0; state.misses=0; state.gameActive=false; state.firstCard=null; state.lockBoard=true;
+
+    // Cache board position NOW before any animation changes the layout
+    cacheBoardRect();
+
+    // Fade the existing board out smoothly before loading new deck
+    el.board.classList.add("fp-refresh-out");
+
     state.deck=await buildDeck(state.activeCardCount);
     state.activeWinTarget=getActiveWinTargetForDeck(state.deck.length,state.currentRound);
     updateRoundPill(); updateTitleForCurrentTarget();
     el.center.classList.add("hidden"); el.play.classList.add("hidden");
-    renderBoard(state.startPreview,false); updateBoardShellMode();
+
+    // Slight pause so the fade-out is visible, then render new board
+    await new Promise(function(res){ setTimeout(res, 220); });
+    renderBoard(state.startPreview, false);
+    el.board.classList.remove("fp-refresh-out");
+    el.board.classList.add("fp-refresh-in");
+    setTimeout(function(){ el.board.classList.remove("fp-refresh-in"); }, 380);
+
+    updateBoardShellMode();
+
     runCountdown(function(){
-      [...el.board.children].forEach(function(c){ if (!c.classList.contains("matched")) c.classList.remove("show"); });
-      state.roundStartedAt=Date.now(); state.lockBoard=false; state.gameActive=true;
-      updateBoardShellMode(); startRoundTimer();
+      // Stagger cards flipping face-down for a nicer hide
+      const cards = [...el.board.children].filter(function(c){ return !c.classList.contains("matched"); });
+      cards.forEach(function(c, i){
+        setTimeout(function(){ c.classList.remove("show"); }, i * 30);
+      });
+      const staggerDuration = cards.length * 30 + 80;
+      setTimeout(function(){
+        state.roundStartedAt=Date.now(); state.lockBoard=false; state.gameActive=true;
+        updateBoardShellMode(); startRoundTimer();
+      }, staggerDuration);
     });
   }
 
@@ -1927,7 +2150,7 @@ document.addEventListener("DOMContentLoaded", function () {
   el.adminUnlock.onclick=unlockAdmin;
   el.adminPin.addEventListener("keydown",function(e){ if (e.key==="Enter") unlockAdmin(); });
 
-  // ── Sliders with frosted glass preview ──
+  // ── Sliders with preview + confirm bar ──
   // Header Logo Size
   if (el.headerLogoSizeInput) {
     bindSliderFrost(el.headerLogoSizeInput);
@@ -1936,7 +2159,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (!isNaN(v)) {
         state.headerLogoHeight=Math.max(24,Math.min(220,v));
         state.headerLogoMaxWidth=Math.max(80,Math.round(state.headerLogoHeight*4.3));
-        applyHeaderLogoLayout(); persistSettings();
+        applyHeaderLogoLayout();
         if (el.headerLogoSizeValue) el.headerLogoSizeValue.textContent=state.headerLogoHeight+"px";
       }
     });
@@ -1949,7 +2172,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const v=parseInt(el.headerLogoOffsetInput.value,10);
       if (!isNaN(v)) {
         state.headerLogoOffsetY=Math.max(0,Math.min(500,v));
-        applyHeaderLogoLayout(); persistSettings();
+        applyHeaderLogoLayout();
         if (el.headerLogoOffsetValue) el.headerLogoOffsetValue.textContent=state.headerLogoOffsetY+"px";
       }
     });
@@ -1962,7 +2185,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const v=parseInt(el.hudOffsetInput.value,10);
       if (!isNaN(v)) {
         state.hudOffsetY=Math.max(-500,Math.min(500,v));
-        applyHudOffset(); persistSettings();
+        applyHudOffset();
         if (el.hudOffsetValue) el.hudOffsetValue.textContent=state.hudOffsetY+"px";
       }
     });
@@ -1975,7 +2198,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const v=parseInt(el.boardOffsetInput.value,10);
       if (!isNaN(v)) {
         state.boardOffsetY=Math.max(-500,Math.min(500,v));
-        applyBoardOffset(); persistSettings();
+        applyBoardOffset();
         if (el.boardOffsetValue) el.boardOffsetValue.textContent=state.boardOffsetY+"px";
       }
     });
@@ -1990,7 +2213,7 @@ document.addEventListener("DOMContentLoaded", function () {
         state.boardWidthPercent=Math.max(60,Math.min(100,v));
         applyBoardAreaSizing();
         if (el.boardWidthValue) el.boardWidthValue.textContent=state.boardWidthPercent+"%";
-        persistSettings(); rerenderBoardForColumnChange();
+        rerenderBoardForColumnChange();
       }
     });
   }
@@ -2004,7 +2227,7 @@ document.addEventListener("DOMContentLoaded", function () {
         state.boardMinHeight=Math.max(0,Math.min(1400,v));
         applyBoardAreaSizing();
         if (el.boardHeightValue) el.boardHeightValue.textContent=state.boardMinHeight+"px";
-        persistSettings(); rerenderBoardForColumnChange();
+        rerenderBoardForColumnChange();
       }
     });
   }
@@ -2018,7 +2241,7 @@ document.addEventListener("DOMContentLoaded", function () {
         state.boardGap=Math.max(6,Math.min(30,v));
         applyBoardAreaSizing();
         if (el.boardGapValue) el.boardGapValue.textContent=state.boardGap+"px";
-        persistSettings(); rerenderBoardForColumnChange();
+        rerenderBoardForColumnChange();
       }
     });
   }
@@ -2068,18 +2291,53 @@ document.addEventListener("DOMContentLoaded", function () {
 
   el.countdownInput.addEventListener("input",function(){
     const v=parseInt(el.countdownInput.value,10);
-    if (!isNaN(v)) { state.startCountdown=Math.max(0,Math.min(10,v)); persistSettings(); }
+    if (!isNaN(v)) {
+      state.startCountdown=Math.max(0,Math.min(10,v));
+      if (el.countdownValue) el.countdownValue.textContent=state.startCountdown+"s";
+      persistSettings();
+    }
   });
 
   el.roundTimerInput.addEventListener("input",function(){
     const v=parseInt(el.roundTimerInput.value,10);
-    if (!isNaN(v)) { state.roundTime=Math.max(5,Math.min(120,v)); if (!state.gameActive) setTimerDisplay(state.roundTime); persistSettings(); }
+    if (!isNaN(v)) {
+      state.roundTime=Math.max(5,Math.min(120,v));
+      if (el.roundTimerValue) el.roundTimerValue.textContent=state.roundTime+"s";
+      if (!state.gameActive) setTimerDisplay(state.roundTime);
+      persistSettings();
+    }
   });
 
   el.idleRefreshInput.addEventListener("input",function(){
     const v=parseInt(el.idleRefreshInput.value,10);
-    if (!isNaN(v)) { state.idleRefreshSeconds=Math.max(0,Math.min(600,v)); persistSettings(); startIdleRefreshTimer(); }
+    if (!isNaN(v)) {
+      state.idleRefreshSeconds=Math.max(0,Math.min(600,v));
+      if (el.idleRefreshValue) el.idleRefreshValue.textContent=state.idleRefreshSeconds+"s";
+      persistSettings(); startIdleRefreshTimer();
+    }
   });
+
+  if (el.roundTransitionInput) {
+    el.roundTransitionInput.addEventListener("input",function(){
+      const v=parseFloat(el.roundTransitionInput.value);
+      if (!isNaN(v)) {
+        state.roundTransitionSecs=Math.max(1,Math.min(8,v));
+        if (el.roundTransitionValue) el.roundTransitionValue.textContent=state.roundTransitionSecs+"s";
+        persistSettings();
+      }
+    });
+  }
+
+  if (el.popupTimingInput) {
+    el.popupTimingInput.addEventListener("input",function(){
+      const v=parseInt(el.popupTimingInput.value,10);
+      if (!isNaN(v)) {
+        state.popupTimingSecs=Math.max(2,Math.min(15,v));
+        if (el.popupTimingValue) el.popupTimingValue.textContent=state.popupTimingSecs+"s";
+        persistSettings();
+      }
+    });
+  }
 
   el.idlePreviewInput.addEventListener("change",function(){
     state.idlePreview=el.idlePreviewInput.checked;
@@ -2149,7 +2407,7 @@ document.addEventListener("DOMContentLoaded", function () {
   el.removeBg.addEventListener("click",function(){ if (window.confirm("Remove the custom background image?")) { applyBackgroundImage(""); persistSettings(); } });
   el.removeFont.addEventListener("click",function(){ if (window.confirm("Remove the custom font and return to the default font?")) { applyCustomFont("",""); persistSettings(); } });
 
-  window.addEventListener("resize",function(){ applyBoardLayout(); updateBoardShellMode(); positionOverlaysOnBoard(); });
+  window.addEventListener("resize",function(){ applyBoardLayout(); updateBoardShellMode(); cacheBoardRect(); positionOverlaysOnBoard(); });
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Gallery Mode — revert page to normal browsing experience
