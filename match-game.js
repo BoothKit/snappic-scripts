@@ -53,10 +53,12 @@ document.addEventListener("DOMContentLoaded", function () {
   const galleryImgs = [...document.querySelectorAll("#gallery .grid-item img")];
   if (!host || galleryImgs.length < 6) return;
 
-  const STORAGE_KEYS = {
+    const STORAGE_KEYS = {
     settings: "fp_settings_v13",
     leaderboard: "fp_lb_v13",
-    galleryMode: "fp_gallery_mode_v1"
+    galleryMode: "fp_gallery_mode_v1",
+    cachedGalleryUrls: "fp_cached_gallery_urls_v1",
+    cachedLastDeck: "fp_cached_last_deck_v1"
   };
 
   const CARD_COUNTS = [6, 8, 10, 12, 16, 20, 30];
@@ -978,6 +980,73 @@ document.addEventListener("DOMContentLoaded", function () {
     return arr;
   }
 
+  function saveCachedGalleryUrls(urls) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.cachedGalleryUrls, JSON.stringify(urls || []));
+    } catch (err) {
+      console.warn("Could not save cached gallery URLs", err);
+    }
+  }
+
+  function getCachedGalleryUrls() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEYS.cachedGalleryUrls) || "[]");
+      return Array.isArray(raw) ? raw.filter(Boolean) : [];
+    } catch (err) {
+      return [];
+    }
+  }
+
+  function saveCachedLastDeck(deck) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.cachedLastDeck, JSON.stringify(deck || []));
+    } catch (err) {
+      console.warn("Could not save cached last deck", err);
+    }
+  }
+
+  function getCachedLastDeck() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEYS.cachedLastDeck) || "[]");
+      return Array.isArray(raw) ? raw.filter(Boolean) : [];
+    } catch (err) {
+      return [];
+    }
+  }
+
+    function seedCachedGalleryUrlsFromCurrentPage() {
+    try {
+      const currentUrls = [...new Set(
+        [...document.querySelectorAll("#gallery .grid-item img")]
+          .map(function(img) { return img.src; })
+          .filter(Boolean)
+      )];
+
+      if (currentUrls.length) {
+        saveCachedGalleryUrls(currentUrls);
+      }
+    } catch (err) {
+      console.warn("Could not seed cached gallery URLs from current page", err);
+    }
+  }
+  
+  function buildDeckFromUrls(urls, deckSize) {
+    const cleanUrls = [...new Set((urls || []).filter(Boolean))];
+    if (!cleanUrls.length) return [];
+
+    const pairsNeeded = deckSize / 2;
+    const shuffledUrls = shuffle(cleanUrls.slice());
+    let pool = shuffledUrls.slice();
+
+    while (pool.length < pairsNeeded) {
+      const extra = shuffle(cleanUrls.slice());
+      pool = pool.concat(extra);
+    }
+
+    const chosen = pool.slice(0, pairsNeeded);
+    return shuffle(chosen.concat(chosen));
+  }
+
   function slugifyFontName(name) {
     return String(name || "Custom Font")
       .replace(/\.[^.]+$/, "")
@@ -1589,23 +1658,61 @@ positionOverlaysOnBoard();
   // ─────────────────────────────────────────────────────────────────────────────
   // Deck building
   // ─────────────────────────────────────────────────────────────────────────────
-  async function buildDeck(cardCountOverride) {
-    const cb = (location.href.indexOf("?")>-1?"&":"?")+"t="+Date.now();
-    const html = await fetch(location.href+cb,{cache:"no-store"}).then(function(r){return r.text();});
-    const doc = new DOMParser().parseFromString(html,"text/html");
-    const urls = [...new Set([...doc.querySelectorAll("#gallery .grid-item img")].map(function(img){return img.src;}).filter(Boolean))];
+    async function buildDeck(cardCountOverride) {
     const deckSize = cardCountOverride || state.cardCount;
-    const pairsNeeded = deckSize / 2;
-    shuffle(urls);
-    // If not enough unique images, cycle through them again to fill up
-    let pool = urls.slice();
-    while (pool.length < pairsNeeded) {
-      const extra = urls.slice();
-      shuffle(extra);
-      pool = pool.concat(extra);
+    const cb = (location.href.indexOf("?") > -1 ? "&" : "?") + "t=" + Date.now();
+
+    // 1) Try live fetch first
+    try {
+      const html = await fetch(location.href + cb, { cache: "no-store" }).then(function(r) {
+        if (!r.ok) throw new Error("Fetch failed with status " + r.status);
+        return r.text();
+      });
+
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const urls = [...new Set(
+        [...doc.querySelectorAll("#gallery .grid-item img")]
+          .map(function(img) { return img.src; })
+          .filter(Boolean)
+      )];
+
+      if (urls.length) {
+        saveCachedGalleryUrls(urls);
+        const liveDeck = buildDeckFromUrls(urls, deckSize);
+        if (liveDeck.length === deckSize) {
+          saveCachedLastDeck(liveDeck);
+          return liveDeck;
+        }
+      }
+    } catch (err) {
+      console.warn("Live deck fetch failed, trying cached gallery URLs", err);
     }
-    const chosen = pool.slice(0, pairsNeeded);
-    return shuffle(chosen.concat(chosen));
+
+    // 2) Fall back to cached gallery URL pool
+    const cachedUrls = getCachedGalleryUrls();
+    if (cachedUrls.length) {
+      const cachedDeck = buildDeckFromUrls(cachedUrls, deckSize);
+      if (cachedDeck.length === deckSize) {
+        saveCachedLastDeck(cachedDeck);
+        return cachedDeck;
+      }
+    }
+
+    // 3) Fall back to last successful deck
+    const lastDeck = getCachedLastDeck();
+    if (lastDeck.length) {
+      if (lastDeck.length === deckSize) {
+        return shuffle(lastDeck.slice());
+      }
+
+      const rebuiltFromLastDeckUrls = buildDeckFromUrls([...new Set(lastDeck)], deckSize);
+      if (rebuiltFromLastDeckUrls.length === deckSize) {
+        return rebuiltFromLastDeckUrls;
+      }
+    }
+
+    // 4) Nothing usable
+    return null;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -2124,13 +2231,25 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
     },1000);
   }
 
-  async function prepareDeck(withAnimation) {
-    const deck=await buildDeck(state.cardCount);
-    state.deck=deck; state.activeCardCount=state.cardCount;
-    state.activeWinTarget=getActiveWinTargetForDeck(state.activeCardCount,state.currentRound);
-    if (!state.gameActive) {
-      if (withAnimation) animateBoardRefresh(state.idlePreview); else renderBoard(state.idlePreview,false);
+    async function prepareDeck(withAnimation) {
+    const deck = await buildDeck(state.cardCount);
+
+    // No-blank-board behavior:
+    // if deck build fails, keep the currently visible deck untouched
+    if (!deck || !deck.length) {
+      console.warn("No deck could be built. Keeping current board.");
+      return;
     }
+
+    state.deck = deck;
+    state.activeCardCount = state.cardCount;
+    state.activeWinTarget = getActiveWinTargetForDeck(state.activeCardCount, state.currentRound);
+
+    if (!state.gameActive) {
+      if (withAnimation) animateBoardRefresh(state.idlePreview);
+      else renderBoard(state.idlePreview, false);
+    }
+
     updateTitleForCurrentTarget();
   }
 
@@ -2146,8 +2265,19 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
     // Fade the existing board out smoothly before loading new deck
     el.board.classList.add("fp-refresh-out");
 
-    state.deck=await buildDeck(state.activeCardCount);
-    state.activeWinTarget=getActiveWinTargetForDeck(state.deck.length,state.currentRound);
+        const nextDeck = await buildDeck(state.activeCardCount);
+
+    // No-blank-board behavior:
+    // if we cannot build a new deck, keep the old board and return to idle
+    if (!nextDeck || !nextDeck.length) {
+      console.warn("Could not build round deck. Keeping current board.");
+      el.board.classList.remove("fp-refresh-out");
+      goIdle();
+      return;
+    }
+
+    state.deck = nextDeck;
+    state.activeWinTarget = getActiveWinTargetForDeck(state.deck.length, state.currentRound);
     updateRoundPill(); updateTitleForCurrentTarget();
     el.center.classList.add("hidden"); el.play.classList.add("hidden");
 
@@ -2204,7 +2334,10 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
   // ─────────────────────────────────────────────────────────────────────────────
   function resetAllSettings() {
     if (!window.confirm("Are you sure you want to reset all settings, custom colors, custom images, logos, font, PIN, and leaderboard?")) return;
-    localStorage.removeItem(STORAGE_KEYS.settings); localStorage.removeItem(STORAGE_KEYS.leaderboard);
+    localStorage.removeItem(STORAGE_KEYS.settings);
+    localStorage.removeItem(STORAGE_KEYS.leaderboard);
+    localStorage.removeItem(STORAGE_KEYS.cachedGalleryUrls);
+    localStorage.removeItem(STORAGE_KEYS.cachedLastDeck);
     Object.assign(state, JSON.parse(JSON.stringify(DEFAULTS)));
     resetRoundState();
     applyThemeColors(state.theme); applyLogo(state.logoUrl); applyHeaderLogo(state.headerLogoUrl);
@@ -2595,6 +2728,8 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
   // ─────────────────────────────────────────────────────────────────────────────
   // Check if we should stay in gallery mode instead of launching game
   if (checkGalleryModeOnLoad()) return;
+  
+  seedCachedGalleryUrlsFromCurrentPage();
 
   loadSettings();
   applyThemeColors(state.theme);
