@@ -219,7 +219,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
       #fp-board.fp-reshuffle { animation: fpShuffleShake .35s ease; }
 
-      /* ── COUNTDOWN: always centered, full viewport ── */
+      /* ── COUNTDOWN: full-page tint, number centered over board via JS padding ── */
       #fp-countdown {
         position: fixed !important;
         top: 0 !important; left: 0 !important;
@@ -229,10 +229,13 @@ document.addEventListener("DOMContentLoaded", function () {
         align-items: center !important;
         justify-content: center !important;
         z-index: 86 !important;
+        pointer-events: none;
+        transition: opacity .22s ease;
+        /* padding-top is set by JS to shift the flex center to the board center */
       }
       #fp-countdown.hidden { display: none !important; }
 
-      /* ── ROUND TRANSITION: always centered, full viewport ── */
+      /* ── ROUND TRANSITION: full-page frosted backdrop, card centered over board via JS padding ── */
       #fp-round-transition {
         position: fixed !important;
         top: 0 !important; left: 0 !important;
@@ -312,10 +315,14 @@ document.addEventListener("DOMContentLoaded", function () {
         box-shadow: 0 2px 8px rgba(0,0,0,.35);
       }
 
-      /* ── Card edge fix: overflow visible on board shell + padding buffer ── */
+      /* ── Card edge fix: overflow visible up the tree so glows/flips aren't clipped ── */
+      #fp-wrap {
+        overflow: visible !important;
+        width: 96vw !important;
+        max-width: none !important;
+      }
       #fp-board-shell {
         overflow: visible !important;
-        padding: 4px !important;
       }
       #fp-board {
         overflow: visible !important;
@@ -325,10 +332,6 @@ document.addEventListener("DOMContentLoaded", function () {
       }
       .fp-inner {
         overflow: visible !important;
-      }
-      /* The FACE still clips its content but we give perspective room */
-      #fp-board-shell {
-        isolation: isolate;
       }
 
       @media (orientation: portrait) {
@@ -394,7 +397,7 @@ document.addEventListener("DOMContentLoaded", function () {
         '<div id="fp-round-transition-card">' +
           '<div id="fp-round-transition-kicker">Get Ready</div>' +
           '<div id="fp-round-transition-title">Round 1</div>' +
-          '<div id="fp-round-transition-copy">Fresh photos loaded for the next round.</div>' +
+          '<div id="fp-round-transition-copy"></div>' +
         '</div>' +
       '</div>' +
 
@@ -598,7 +601,7 @@ document.addEventListener("DOMContentLoaded", function () {
               // ── Gallery Mode ──
               '<div class="fp-admin-section fp-admin-section-full">' +
                 '<h3>Gallery Mode</h3>' +
-                '<p class="fp-admin-sub" style="margin:0 0 14px">Switch to the normal photo gallery so clients can browse photos after the event. A floating button lets you return to game mode using the same PIN.</p>' +
+                '<p class="fp-admin-sub" style="margin:0 0 14px">Switch to the normal photo gallery so clients can browse photos after the event. To return to game mode, reload the page from your event dashboard.</p>' +
                 '<div class="fp-admin-actions">' +
                   '<button id="fp-enter-gallery" type="button" class="fp-admin-secondary">View Gallery</button>' +
                 '</div>' +
@@ -1436,17 +1439,82 @@ document.addEventListener("DOMContentLoaded", function () {
   function buildKeyboard() {
     const rows=[["Q","W","E","R","T","Y","U","I","O","P"],["A","S","D","F","G","H","J","K","L","←"],["Z","X","C","V","B","N","M"]];
     el.keys.innerHTML="";
-    rows.forEach(function(row){
-      row.forEach(function(key){
-        const b=document.createElement("div");
-        b.className="fp-key";
-        b.textContent=key==="←"?"⌫":key;
-        b.onclick=function(){ pressKey(key); };
-        el.keys.appendChild(b);
-      });
+
+    rows.forEach(function(row, rowIndex){
+      if (rowIndex < 2) {
+        // Rows 1 and 2 fill all 10 columns normally
+        row.forEach(function(key){
+          const b=document.createElement("div");
+          b.className="fp-key";
+          b.textContent=key==="←"?"⌫":key;
+          b.onclick=function(){ pressKey(key); };
+          el.keys.appendChild(b);
+        });
+      } else {
+        // Row 3 (Z-M, 7 keys): center with half-column offsets either side
+        // Use a 1-col spacer, then 7 keys, then 1-col spacer (leaving 1 col = padded by grid)
+        // Actually: wrap row 3 in a subgrid spanning all 10 cols, justified center
+        const rowWrap = document.createElement("div");
+        rowWrap.style.cssText =
+          "grid-column:1/-1;display:flex;justify-content:center;gap:inherit;";
+        row.forEach(function(key){
+          const b=document.createElement("div");
+          b.className="fp-key";
+          b.style.cssText="flex:0 0 calc((100% - 9 * var(--fp-key-gap, 10px)) / 10);max-width:calc((100% - 9 * var(--fp-key-gap, 10px)) / 10);";
+          b.textContent=key;
+          b.onclick=function(){ pressKey(key); };
+          rowWrap.appendChild(b);
+        });
+        el.keys.appendChild(rowWrap);
+      }
     });
+
+    // Bottom row: SPACE and CLEAR each span 5 cols
     const sp=document.createElement("div"); sp.className="fp-key bottom-key bottom-left"; sp.textContent="SPACE"; sp.onclick=function(){pressKey("SPACE");}; el.keys.appendChild(sp);
     const cl=document.createElement("div"); cl.className="fp-key bottom-key bottom-right"; cl.textContent="CLEAR"; cl.onclick=function(){pressKey("CLEAR");}; el.keys.appendChild(cl);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Position countdown + round transition over the board shell, not full viewport
+  // ─────────────────────────────────────────────────────────────────────────────
+  function positionOverlaysOnBoard() {
+    if (!el.boardShell) return;
+    const r = el.boardShell.getBoundingClientRect();
+    const vph = window.innerHeight;
+    const vpw = window.innerWidth;
+    // How far the board center is from the viewport center
+    const shiftX = (r.left + r.width / 2) - vpw / 2;
+    const shiftY = (r.top + r.height / 2) - vph / 2;
+    const tx = "translateX(" + shiftX + "px) translateY(" + shiftY + "px)";
+
+    // Countdown: element stays full-screen (inset:0 in CSS).
+    // Only shift the text content to the board center using a wrapper span.
+    if (el.countdown) {
+      el.countdown.style.transform = "";
+      // Wrap the text node in a span if not already done
+      if (!el.countdown.querySelector(".fp-countdown-inner")) {
+        const inner = document.createElement("span");
+        inner.className = "fp-countdown-inner";
+        inner.style.cssText = "display:block;transition:transform .1s ease;";
+        inner.textContent = el.countdown.textContent;
+        el.countdown.textContent = "";
+        el.countdown.appendChild(inner);
+      }
+      const inner = el.countdown.querySelector(".fp-countdown-inner");
+      if (inner) inner.style.transform = tx;
+    }
+
+    // Round transition: full-page backdrop, card shifted to board center
+    if (el.roundTransition) {
+      const rtCard = el.roundTransition.querySelector("#fp-round-transition-card");
+      if (rtCard) rtCard.style.transform = tx;
+    }
+
+    // Name entry + result popup: full-page backdrop, card centered on board
+    if (el.center) {
+      const fpCard = el.center.querySelector("#fp-card");
+      if (fpCard) fpCard.style.transform = tx;
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1594,6 +1662,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // ─────────────────────────────────────────────────────────────────────────────
   function showNameEntry() {
     clearTimeout(state.autoBackTimer); stopIdleRefreshTimer();
+    positionOverlaysOnBoard();
     updateTitleForCurrentTarget();
     el.copy.textContent="Enter your name, then tap start.";
     el.center.classList.remove("hidden"); el.keys.style.display=""; el.name.style.display="";
@@ -1603,6 +1672,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function showResult(title,text,delayMs) {
     clearTimeout(state.autoBackTimer);
+    positionOverlaysOnBoard();
     el.head.textContent=title; el.copy.textContent=text; el.center.classList.remove("hidden");
     el.keys.style.display="none"; el.name.style.display="none";
     el.start.classList.add("hidden"); el.cancel.classList.add("hidden"); el.replay.classList.remove("hidden");
@@ -1612,6 +1682,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function showRoundTransition(title,copy,done) {
     clearTimeout(state.autoBackTimer);
+    positionOverlaysOnBoard();
     el.roundTransitionKicker.textContent=isSurvivalMode()?"Next Round":"Get Ready";
     el.roundTransitionTitle.textContent=title; el.roundTransitionCopy.textContent=copy;
     el.roundTransition.classList.remove("hidden");
@@ -1633,7 +1704,10 @@ document.addEventListener("DOMContentLoaded", function () {
   function finishGoalModeSuccess(elapsed) {
     if (state.playerName) saveScore({n:state.playerName,t:elapsed,mode:"goal",category:getCurrentLeaderboardCategory(),winTarget:state.winTarget,ts:Date.now()});
     state.playerName=""; updateNameUI();
-    showResult("You Found a Match!","Target: "+getWinTargetLabelFor(state.deck.length,state.currentRound)+". Time: "+elapsed.toFixed(2)+"s",5000);
+    const target = state.activeWinTarget;
+    const winTitle = target > 1 ? "All Matches Found!" : "You Found a Match!";
+    const winCopy = "Target: "+getWinTargetLabelFor(state.deck.length,state.currentRound)+". Time: "+elapsed.toFixed(2)+"s";
+    showResult(winTitle, winCopy, 5000);
   }
 
   function finishSurvivalModeSuccess(totalTime) {
@@ -1650,7 +1724,16 @@ document.addEventListener("DOMContentLoaded", function () {
     else showResult("Time's Up!","You did not complete round 1. Starting over shortly...",5000);
   }
 
-  function advanceToNextRound() { state.currentRound+=1; startConfiguredRound(); }
+  function getDifficultyDescription() {
+    if (!isSurvivalMode()) return "";
+    switch (state.roundDifficulty) {
+      case "lessTime":        return "Each round you get less time.";
+      case "moreCards":       return "The board gets bigger each round.";
+      case "randomReshuffle": return "Miss a pair and the board reshuffles.";
+      case "moreMatches":     return "More matches are required each round.";
+      default:                return "Same settings every round.";
+    }
+  }
 
   function winRound() {
     clearInterval(state.roundTimerId); state.gameActive=false;
@@ -1658,7 +1741,9 @@ document.addEventListener("DOMContentLoaded", function () {
     state.roundResults.push({round:state.currentRound,time:elapsed,misses:state.misses,cardCount:state.activeCardCount,timer:state.activeRoundTime,target:state.activeWinTarget});
     if (!isSurvivalMode()) { finishGoalModeSuccess(elapsed); return; }
     const maxR=getMaxRoundsValue();
-    const copy="Fresh photos loaded. Next target: "+getWinTargetLabelFor(state.activeCardCount,state.currentRound+1)+".";
+    const diffDesc = getDifficultyDescription();
+    const nextTarget = getWinTargetLabelFor(state.activeCardCount, state.currentRound+1);
+    const copy = (diffDesc ? diffDesc + " " : "") + "Next target: " + nextTarget + ".";
     if (state.rounds==="endless"||state.currentRound<maxR) { showRoundTransition("Round "+state.currentRound+" Complete",copy,advanceToNextRound); return; }
     finishSurvivalModeSuccess(getSurvivalTotalCompletedTime());
   }
@@ -1682,7 +1767,11 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function showCountdownValue(v) {
-    el.countdown.textContent=v; el.countdown.classList.remove("hidden");
+    positionOverlaysOnBoard();
+    // Set text on the inner span if it exists, otherwise on the element directly
+    const inner = el.countdown.querySelector(".fp-countdown-inner");
+    if (inner) inner.textContent = v; else el.countdown.textContent = v;
+    el.countdown.classList.remove("hidden");
     requestAnimationFrame(function(){ requestAnimationFrame(function(){ el.countdown.classList.add("show"); }); });
   }
 
@@ -1705,7 +1794,10 @@ document.addEventListener("DOMContentLoaded", function () {
     const id=setInterval(function(){
       v-=1;
       if (v<=0) { clearInterval(id); hideCountdown(false); setTimeout(function(){ done(); },280); }
-      else el.countdown.textContent=v;
+      else {
+        const inner = el.countdown.querySelector(".fp-countdown-inner");
+        if (inner) inner.textContent = v; else el.countdown.textContent = v;
+      }
     },1000);
   }
 
@@ -1742,8 +1834,11 @@ document.addEventListener("DOMContentLoaded", function () {
     el.center.classList.add("hidden"); updateBoardShellMode();
     const introTarget=getWinTargetLabelFor(state.cardCount,1);
     const introTitle=getTitleForTarget(state.cardCount,1);
-    const title=isSurvivalMode()?"Round 1":"Start";
-    const copy=isSurvivalMode() ? "Fresh photos loaded for round 1. Target: "+introTarget+"." : "Fresh photos loaded. "+introTitle+".";
+    const title=isSurvivalMode()?"Round 1":"Get Ready";
+    const diffDesc = getDifficultyDescription();
+    const copy = isSurvivalMode()
+      ? (diffDesc ? diffDesc + " " : "") + "Target: " + introTarget + "."
+      : "Target: " + introTitle + ".";
     showRoundTransition(title,copy,startConfiguredRound);
   }
 
@@ -2054,7 +2149,7 @@ document.addEventListener("DOMContentLoaded", function () {
   el.removeBg.addEventListener("click",function(){ if (window.confirm("Remove the custom background image?")) { applyBackgroundImage(""); persistSettings(); } });
   el.removeFont.addEventListener("click",function(){ if (window.confirm("Remove the custom font and return to the default font?")) { applyCustomFont("",""); persistSettings(); } });
 
-  window.addEventListener("resize",function(){ applyBoardLayout(); updateBoardShellMode(); });
+  window.addEventListener("resize",function(){ applyBoardLayout(); updateBoardShellMode(); positionOverlaysOnBoard(); });
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Gallery Mode — revert page to normal browsing experience
@@ -2091,260 +2186,21 @@ document.addEventListener("DOMContentLoaded", function () {
     // Page is navigating — nothing below here runs.
   }
 
-  function injectGalleryReturnButton() {
-    // Don't double-inject
-    if (document.getElementById("fp-gallery-return-wrap")) return;
-
-    const style = document.createElement("style");
-    style.id = "fp-gallery-return-styles";
-    style.textContent = `
-      #fp-gallery-return-wrap {
-        position: fixed;
-        bottom: 28px;
-        right: 28px;
-        z-index: 999999;
-        font-family: Arial, sans-serif;
-      }
-      #fp-gallery-return-btn {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 14px 22px;
-        border-radius: 999px;
-        border: none;
-        background: #1C1F27;
-        color: #fff;
-        font-size: 15px;
-        font-weight: 700;
-        cursor: pointer;
-        box-shadow: 0 8px 32px rgba(0,0,0,.38);
-        letter-spacing: .04em;
-        transition: transform .15s ease, box-shadow .15s ease;
-      }
-      #fp-gallery-return-btn:hover {
-        transform: scale(1.04);
-        box-shadow: 0 12px 40px rgba(0,0,0,.46);
-      }
-      #fp-gallery-return-btn:active { transform: scale(.98); }
-
-      /* PIN modal */
-      #fp-gallery-pin-modal {
-        position: fixed;
-        inset: 0;
-        z-index: 9999999;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 24px;
-        background: rgba(0,0,0,.72);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        font-family: Arial, sans-serif;
-      }
-      #fp-gallery-pin-modal.hidden { display: none; }
-      #fp-gallery-pin-card {
-        background: #1C1F27;
-        border: 1px solid rgba(255,255,255,.14);
-        border-radius: 28px;
-        padding: 32px 28px;
-        width: min(92vw, 380px);
-        box-shadow: 0 24px 80px rgba(0,0,0,.5);
-        color: #fff;
-        text-align: center;
-      }
-      #fp-gallery-pin-title {
-        font-size: 22px;
-        font-weight: 800;
-        letter-spacing: .04em;
-        text-transform: uppercase;
-        margin: 0 0 8px;
-      }
-      #fp-gallery-pin-sub {
-        font-size: 14px;
-        opacity: .72;
-        margin: 0 0 20px;
-        line-height: 1.45;
-      }
-      #fp-gallery-pin-display {
-        padding: 14px 18px;
-        border-radius: 14px;
-        background: rgba(255,255,255,.08);
-        border: 1px solid rgba(255,255,255,.14);
-        font-size: 24px;
-        font-weight: 800;
-        letter-spacing: .18em;
-        min-height: 56px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 16px;
-      }
-      #fp-gallery-pin-display.empty { font-size: 15px; opacity: .5; letter-spacing: .04em; }
-      #fp-gallery-pin-keys {
-        display: grid;
-        grid-template-columns: repeat(3,1fr);
-        gap: 10px;
-        margin-bottom: 16px;
-      }
-      .fp-gallery-pin-key {
-        padding: 14px 8px;
-        border-radius: 14px;
-        border: 1px solid rgba(255,255,255,.14);
-        background: rgba(255,255,255,.08);
-        color: #fff;
-        font-size: 18px;
-        font-weight: 800;
-        text-align: center;
-        cursor: pointer;
-      }
-      #fp-gallery-pin-error {
-        font-size: 13px;
-        color: #ff6b6b;
-        min-height: 18px;
-        margin-bottom: 12px;
-      }
-      #fp-gallery-pin-actions {
-        display: flex;
-        gap: 10px;
-        justify-content: center;
-      }
-      #fp-gallery-pin-submit {
-        padding: 13px 28px;
-        border-radius: 999px;
-        border: none;
-        background: #fff;
-        color: #111;
-        font-size: 16px;
-        font-weight: 800;
-        cursor: pointer;
-      }
-      #fp-gallery-pin-cancel {
-        padding: 13px 22px;
-        border-radius: 999px;
-        border: 1px solid rgba(255,255,255,.18);
-        background: rgba(255,255,255,.08);
-        color: #fff;
-        font-size: 16px;
-        font-weight: 700;
-        cursor: pointer;
-      }
-    `;
-    document.head.appendChild(style);
-
-    // Floating button
-    const wrap = document.createElement("div");
-    wrap.id = "fp-gallery-return-wrap";
-    wrap.innerHTML =
-      '<button id="fp-gallery-return-btn" type="button">🎮 Return to Game</button>' +
-      '<div id="fp-gallery-pin-modal" class="hidden">' +
-        '<div id="fp-gallery-pin-card">' +
-          '<div id="fp-gallery-pin-title">Return to Game</div>' +
-          '<p id="fp-gallery-pin-sub">Enter the admin PIN to switch back to game mode.</p>' +
-          '<div id="fp-gallery-pin-display" class="empty">ENTER PIN</div>' +
-          '<div id="fp-gallery-pin-keys"></div>' +
-          '<div id="fp-gallery-pin-error"></div>' +
-          '<div id="fp-gallery-pin-actions">' +
-            '<button id="fp-gallery-pin-submit" type="button">Unlock</button>' +
-            '<button id="fp-gallery-pin-cancel" type="button">Cancel</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    document.body.appendChild(wrap);
-
-    // PIN state
-    let pinValue = "";
-
-    function updatePinDisplay() {
-      const disp = document.getElementById("fp-gallery-pin-display");
-      if (!disp) return;
-      if (!pinValue.length) {
-        disp.textContent = "ENTER PIN";
-        disp.classList.add("empty");
-      } else {
-        disp.textContent = "• ".repeat(pinValue.length).trim();
-        disp.classList.remove("empty");
-      }
-    }
-
-    function buildPinKeys() {
-      const container = document.getElementById("fp-gallery-pin-keys");
-      if (!container) return;
-      container.innerHTML = "";
-      ["1","2","3","4","5","6","7","8","9","CLEAR","0","←"].forEach(function(key) {
-        const b = document.createElement("div");
-        b.className = "fp-gallery-pin-key";
-        b.textContent = key === "←" ? "⌫" : key;
-        b.onclick = function() {
-          if (key === "CLEAR") pinValue = "";
-          else if (key === "←") pinValue = pinValue.slice(0,-1);
-          else if (/^\d$/.test(key) && pinValue.length < 8) pinValue += key;
-          updatePinDisplay();
-          const err = document.getElementById("fp-gallery-pin-error");
-          if (err) err.textContent = "";
-        };
-        container.appendChild(b);
-      });
-    }
-
-    function openPinModal() {
-      pinValue = "";
-      updatePinDisplay();
-      buildPinKeys();
-      const modal = document.getElementById("fp-gallery-pin-modal");
-      if (modal) modal.classList.remove("hidden");
-      const err = document.getElementById("fp-gallery-pin-error");
-      if (err) err.textContent = "";
-    }
-
-    function closePinModal() {
-      const modal = document.getElementById("fp-gallery-pin-modal");
-      if (modal) modal.classList.add("hidden");
-      pinValue = "";
-    }
-
-    function attemptReturnToGame() {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.settings) || "null");
-      const currentPin = (saved && saved.adminPin) ? saved.adminPin : DEFAULTS.adminPin;
-      if (pinValue === currentPin) {
-        // Clear gallery flag from both localStorage and URL, then reload
-        localStorage.removeItem(STORAGE_KEYS.galleryMode);
-        const url = new URL(window.location.href);
-        url.searchParams.delete("gallery");
-        window.location.replace(url.toString());
-      } else {
-        pinValue = "";
-        updatePinDisplay();
-        const err = document.getElementById("fp-gallery-pin-error");
-        if (err) err.textContent = "Incorrect PIN. Try again.";
-      }
-    }
-
-    document.getElementById("fp-gallery-return-btn").onclick = openPinModal;
-    document.getElementById("fp-gallery-pin-submit").onclick = attemptReturnToGame;
-    document.getElementById("fp-gallery-pin-cancel").onclick = closePinModal;
-
-    // Close modal on backdrop click
-    document.getElementById("fp-gallery-pin-modal").addEventListener("click", function(e) {
-      if (e.target === this) closePinModal();
-    });
-  }
-
   function checkGalleryModeOnLoad() {
     const urlParams = new URLSearchParams(window.location.search);
     const galleryParam = urlParams.get("gallery") === "1";
     const galleryStored = localStorage.getItem(STORAGE_KEYS.galleryMode) === "1";
     if (!galleryParam && !galleryStored) return false;
-    // earlyGalleryCheck at the top already injected restore styles.
-    // Just remove context block + show the return button.
+    // earlyGalleryCheck already restored page styles — just block context menu
+    // and let the normal Snappic page render. No return button injected.
     document.removeEventListener("contextmenu", preventContext);
-    injectGalleryReturnButton();
     return true;
   }
 
   // Wire up the "View Gallery" button in admin
   if (el.enterGallery) {
     el.enterGallery.addEventListener("click", function() {
-      if (window.confirm("Switch to Gallery Mode?\n\nThe game will be hidden and the normal photo gallery will be shown. Visitors can browse photos freely.\n\nTo return to game mode, use the floating button on the page (PIN required).")) {
+      if (window.confirm("Switch to Gallery Mode?\n\nThe game will be hidden and the normal photo gallery will be shown.\n\nTo return to game mode, reload the page from the event dashboard.")) {
         closeAdmin();
         enterGalleryMode();
       }
