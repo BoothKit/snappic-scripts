@@ -238,7 +238,30 @@ document.addEventListener("DOMContentLoaded", function () {
         animation: fpCountdownPulse .85s ease forwards;
       }
 
-      @keyframes fpShuffleShake {
+      #fp-top-right {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+      }
+      #fp-live-leaderboard {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        white-space: normal;
+        width: 100%;
+      }
+      #fp-top-meta {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
         0%{transform:translateX(0)} 20%{transform:translateX(-8px)}
         40%{transform:translateX(8px)} 60%{transform:translateX(-6px)}
         80%{transform:translateX(6px)} 100%{transform:translateX(0)}
@@ -440,12 +463,12 @@ document.addEventListener("DOMContentLoaded", function () {
           '</div>' +
         '</div>' +
         '<div id="fp-top-right">' +
+          '<div id="fp-live-leaderboard"></div>' +
           '<div id="fp-top-meta">' +
             '<div id="fp-round-pill" class="hidden"></div>' +
             '<div id="fp-timer">20</div>' +
-            '<div id="fp-live-leaderboard"></div>' +
+            '<button id="fp-admin" type="button" aria-label="Admin Settings">⚙</button>' +
           '</div>' +
-          '<button id="fp-admin" type="button" aria-label="Admin Settings">⚙</button>' +
         '</div>' +
       '</div>' +
 
@@ -1388,9 +1411,21 @@ document.addEventListener("DOMContentLoaded", function () {
     el.winTargets.forEach(function(b){ b.classList.toggle("active", String(state.winTarget)===b.getAttribute("data-win")); });
     setWinTargetDisabledUi(isWinTargetOverridden());
     el.columnButtons.forEach(function(b){ b.classList.toggle("active", String(state.columns)===b.getAttribute("data-columns")); });
-    el.cardCountButtons.forEach(function(b){ b.classList.toggle("active", String(state.cardCount)===b.getAttribute("data-card-count")); });
+    el.cardCountButtons.forEach(function(b){
+      const isMax = b.getAttribute("data-card-count") === "30";
+      const shouldDisable = isMax && state.roundDifficulty === "moreCards";
+      b.classList.toggle("active", String(state.cardCount)===b.getAttribute("data-card-count") && !shouldDisable);
+      b.classList.toggle("disabled", shouldDisable);
+      b.disabled = shouldDisable;
+    });
     el.roundButtons.forEach(function(b){ b.classList.toggle("active", String(state.rounds)===b.getAttribute("data-rounds")); });
-    el.difficultyButtons.forEach(function(b){ b.classList.toggle("active", String(state.roundDifficulty)===b.getAttribute("data-difficulty")); });
+    el.difficultyButtons.forEach(function(b){
+      const isMoreCards = b.getAttribute("data-difficulty") === "moreCards";
+      const shouldDisable = isMoreCards && state.cardCount === 30;
+      b.classList.toggle("active", String(state.roundDifficulty)===b.getAttribute("data-difficulty") && !shouldDisable);
+      b.classList.toggle("disabled", shouldDisable);
+      b.disabled = shouldDisable;
+    });
 
     el.countdownInput.value=state.startCountdown;
     if (el.countdownValue) el.countdownValue.textContent=state.startCountdown+"s";
@@ -1526,8 +1561,16 @@ document.addEventListener("DOMContentLoaded", function () {
     const doc = new DOMParser().parseFromString(html,"text/html");
     const urls = [...new Set([...doc.querySelectorAll("#gallery .grid-item img")].map(function(img){return img.src;}).filter(Boolean))];
     const deckSize = cardCountOverride || state.cardCount;
+    const pairsNeeded = deckSize / 2;
     shuffle(urls);
-    const chosen = urls.slice(0, deckSize/2);
+    // If not enough unique images, cycle through them again to fill up
+    let pool = urls.slice();
+    while (pool.length < pairsNeeded) {
+      const extra = urls.slice();
+      shuffle(extra);
+      pool = pool.concat(extra);
+    }
+    const chosen = pool.slice(0, pairsNeeded);
     return shuffle(chosen.concat(chosen));
   }
 
@@ -2291,7 +2334,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   el.cardCountButtons.forEach(function(b){
     b.onclick=function(){
-      state.cardCount=parseInt(b.getAttribute("data-card-count"),10);
+      const v=parseInt(b.getAttribute("data-card-count"),10);
+      if (v===30 && state.roundDifficulty==="moreCards") return;
+      state.cardCount=v;
       state.activeCardCount=state.cardCount;
       updateSettingsUI(); persistSettings(); prepareDeck(true);
     };
@@ -2309,6 +2354,7 @@ document.addEventListener("DOMContentLoaded", function () {
     b.onclick=function(){
       const v=b.getAttribute("data-difficulty");
       if (ROUND_DIFFICULTIES.indexOf(v)===-1) return;
+      if (v==="moreCards" && state.cardCount===30) return;
       state.roundDifficulty=v; updateSettingsUI(); updateRoundPill(); renderLeaderboard(); persistSettings();
     };
   });
