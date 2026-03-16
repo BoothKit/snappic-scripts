@@ -186,6 +186,13 @@ document.addEventListener("DOMContentLoaded", function () {
         color: var(--fp-text); font-size: 18px; font-weight: 800;
         text-align: center; cursor: pointer;
         user-select: none; -webkit-user-select: none;
+        transition: background .1s ease, color .1s ease, border-color .1s ease, transform .1s ease;
+      }
+      .fp-key.fp-key-active {
+        background: var(--fp-accent) !important;
+        color: var(--fp-accent-text) !important;
+        border-color: transparent !important;
+        transform: scale(.94);
       }
       .fp-key.bottom-key { margin-top: 2px; }
       .fp-key.bottom-left, .fp-key.bottom-right { grid-column: span 5; }
@@ -1602,37 +1609,54 @@ document.addEventListener("DOMContentLoaded", function () {
 
     rows.forEach(function(row, rowIndex){
       if (rowIndex < 2) {
-        // Rows 1 and 2 fill all 10 columns normally
         row.forEach(function(key){
           const b=document.createElement("div");
           b.className="fp-key";
+          b.dataset.key=key;
           b.textContent=key==="←"?"⌫":key;
-          b.onclick=function(){ pressKey(key); };
+          b.onclick=function(){ flashKey(key); pressKey(key); };
           el.keys.appendChild(b);
         });
       } else {
-        // Row 3 (Z-M, 7 keys): center with half-column offsets either side
-        // Use a 1-col spacer, then 7 keys, then 1-col spacer (leaving 1 col = padded by grid)
-        // Actually: wrap row 3 in a subgrid spanning all 10 cols, justified center
         const rowWrap = document.createElement("div");
         rowWrap.style.cssText =
           "grid-column:1/-1;display:flex;justify-content:center;gap:inherit;";
         row.forEach(function(key){
           const b=document.createElement("div");
           b.className="fp-key";
+          b.dataset.key=key;
           b.style.cssText="flex:0 0 calc((100% - 9 * var(--fp-key-gap, 10px)) / 10);max-width:calc((100% - 9 * var(--fp-key-gap, 10px)) / 10);";
           b.textContent=key;
-          b.onclick=function(){ pressKey(key); };
+          b.onclick=function(){ flashKey(key); pressKey(key); };
           rowWrap.appendChild(b);
         });
         el.keys.appendChild(rowWrap);
       }
     });
 
-    // Bottom row: SPACE and CLEAR each span 5 cols
-    const sp=document.createElement("div"); sp.className="fp-key bottom-key bottom-left"; sp.textContent="SPACE"; sp.onclick=function(){pressKey("SPACE");}; el.keys.appendChild(sp);
-    const cl=document.createElement("div"); cl.className="fp-key bottom-key bottom-right"; cl.textContent="CLEAR"; cl.onclick=function(){pressKey("CLEAR");}; el.keys.appendChild(cl);
+    const sp=document.createElement("div"); sp.className="fp-key bottom-key bottom-left"; sp.dataset.key="SPACE"; sp.textContent="SPACE"; sp.onclick=function(){ flashKey("SPACE"); pressKey("SPACE"); }; el.keys.appendChild(sp);
+    const cl=document.createElement("div"); cl.className="fp-key bottom-key bottom-right"; cl.dataset.key="CLEAR"; cl.textContent="CLEAR"; cl.onclick=function(){ flashKey("CLEAR"); pressKey("CLEAR"); }; el.keys.appendChild(cl);
   }
+
+  function flashKey(key) {
+    const sel = '[data-key="' + key + '"]';
+    const el_key = el.keys.querySelector(sel);
+    if (!el_key) return;
+    el_key.classList.add("fp-key-active");
+    clearTimeout(el_key._flashTimer);
+    el_key._flashTimer = setTimeout(function(){ el_key.classList.remove("fp-key-active"); }, 180);
+  }
+
+  // Physical keyboard support for name entry
+  document.addEventListener("keydown", function(e) {
+    if (el.center.classList.contains("hidden")) return;
+    if (!el.keys.style.display || el.keys.style.display === "none") return;
+    const key = e.key;
+    if (key === "Backspace") { flashKey("←"); pressKey("←"); }
+    else if (key === " ") { e.preventDefault(); flashKey("SPACE"); pressKey("SPACE"); }
+    else if (key === "Escape") { flashKey("CLEAR"); pressKey("CLEAR"); }
+    else if (/^[a-zA-Z]$/.test(key)) { const k = key.toUpperCase(); flashKey(k); pressKey(k); }
+  });
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Position countdown + round transition over the board shell, not full viewport
