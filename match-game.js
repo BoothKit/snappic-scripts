@@ -42,6 +42,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const DEFAULTS = {
     playerName: "",
     autoBackTimer: 0,
+    nameEntryTimer: 0,
     roundTimerId: 0,
     idleRefreshTimerId: 0,
     firstCard: null,
@@ -252,18 +253,24 @@ document.addEventListener("DOMContentLoaded", function () {
         width: 100%;
       }
       #fp-top-meta {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-        0%{transform:translateX(0)} 20%{transform:translateX(-8px)}
-        40%{transform:translateX(8px)} 60%{transform:translateX(-6px)}
-        80%{transform:translateX(6px)} 100%{transform:translateX(0)}
-      }
-      #fp-board.fp-reshuffle { animation: fpShuffleShake .35s ease; }
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@keyframes fpShuffleShake {
+  0% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(6px); }
+  100% { transform: translateX(0); }
+}
+
+#fp-board.fp-reshuffle { animation: fpShuffleShake .35s ease; }
 
       /* ── COUNTDOWN: full-page tint, number centered over board via JS padding ── */
       #fp-countdown {
@@ -1114,6 +1121,9 @@ document.addEventListener("DOMContentLoaded", function () {
       el.boardShell.style.transform = "";
       el.boardShell.style.marginTop = off + "px";
     }
+    
+    cacheBoardRect();
+    positionOverlaysOnBoard();
   }
 
   function applyBoardAreaSizing() {
@@ -1131,11 +1141,14 @@ document.addEventListener("DOMContentLoaded", function () {
       el.boardShell.style.height = state.boardMinHeight > 0 ? state.boardMinHeight + "px" : "";
     }
     if (el.board) {
-      el.board.style.gap = state.boardGap + "px";
-      el.board.style.width = "100%";
-      el.board.style.height = state.boardMinHeight > 0 ? "100%" : "";
-    }
-  }
+  el.board.style.gap = state.boardGap + "px";
+  el.board.style.width = "100%";
+  el.board.style.height = state.boardMinHeight > 0 ? "100%" : "";
+}
+
+cacheBoardRect();
+positionOverlaysOnBoard();
+}
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Leaderboard
@@ -1895,14 +1908,33 @@ document.addEventListener("DOMContentLoaded", function () {
   // Game flow
   // ─────────────────────────────────────────────────────────────────────────────
   function showNameEntry() {
-    clearTimeout(state.autoBackTimer); stopIdleRefreshTimer();
-    positionOverlaysOnBoard();
-    updateTitleForCurrentTarget();
-    el.copy.textContent="Enter your name, then tap start.";
-    el.center.classList.remove("hidden"); el.keys.style.display=""; el.name.style.display="";
-    el.start.classList.remove("hidden"); el.cancel.classList.remove("hidden"); el.replay.classList.add("hidden");
-    renderLeaderboard(); buildKeyboard(); updateNameUI(); updateBoardShellMode();
-  }
+  clearTimeout(state.autoBackTimer);
+  clearTimeout(state.nameEntryTimer);
+  stopIdleRefreshTimer();
+    
+  cacheBoardRect();
+  positionOverlaysOnBoard();
+    
+  updateTitleForCurrentTarget();
+  el.copy.textContent = "Enter your name, then tap start.";
+  el.center.classList.remove("hidden");
+  el.keys.style.display = "";
+  el.name.style.display = "";
+  el.start.classList.remove("hidden");
+  el.cancel.classList.remove("hidden");
+  el.replay.classList.add("hidden");
+
+  renderLeaderboard();
+  buildKeyboard();
+  updateNameUI();
+  updateBoardShellMode();
+
+  state.nameEntryTimer = setTimeout(function() {
+    if (!el.center.classList.contains("hidden") && !state.gameActive) {
+      goIdle();
+    }
+  }, 20000);
+}
 
   function showResult(title,text,delayMs) {
     clearTimeout(state.autoBackTimer);
@@ -2037,16 +2069,19 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function goIdle() {
-    clearTimeout(state.autoBackTimer); clearInterval(state.roundTimerId);
+  clearTimeout(state.autoBackTimer);
+  clearTimeout(state.nameEntryTimer);
+  clearInterval(state.roundTimerId);
     resetRoundState(); setTimerDisplay(state.roundTime);
     el.player.textContent=""; state.playerName=""; state.firstCard=null;
     state.lockBoard=false; state.matchedPairs=0; state.gameActive=false;
     el.center.classList.add("hidden"); hideCountdown(true);
     el.roundTransition.classList.remove("show"); el.roundTransition.classList.add("hidden");
     updateNameUI(); updateRoundPill(); updateTitleForCurrentTarget();
-    if (state.deck.length) renderBoard(state.idlePreview,false);
-    cacheBoardRect();
-    el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboard(); startIdleRefreshTimer();
+    if (state.deck.length) renderBoard(state.idlePreview, false);
+cacheBoardRect();
+positionOverlaysOnBoard();
+el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboard(); startIdleRefreshTimer();
   }
 
   function runCountdown(done) {
@@ -2117,6 +2152,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   async function startGame() {
     if (state.playerName.length<2) return;
+    clearTimeout(state.nameEntryTimer);
     resetRoundState();
     el.center.classList.add("hidden"); updateBoardShellMode();
     const introTarget=getWinTargetLabelFor(state.cardCount,1);
