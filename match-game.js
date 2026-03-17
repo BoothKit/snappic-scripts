@@ -1,27 +1,28 @@
 document.addEventListener("DOMContentLoaded", function () {
     // Block only multi-touch gestures like pinch zoom
-  function bindGameTouchLock() {
-  const game = document.getElementById("fp-game");
-  if (!game) return;
-
-  const TOP_SAFE_ZONE = 120;
-
-  function isInTopSafeZone(e) {
-    const touch =
-      (e.touches && e.touches[0]) ||
-      (e.changedTouches && e.changedTouches[0]);
-
-    if (!touch) return false;
-    return touch.clientY <= TOP_SAFE_ZONE;
-  }
-
-  game.addEventListener("touchmove", function(e) {
-    if (isInTopSafeZone(e)) return;
+  document.addEventListener("touchmove", function(e) {
     if (e.touches && e.touches.length > 1) {
       e.preventDefault();
     }
   }, { passive: false });
-}
+
+  document.addEventListener("touchstart", function(e) {
+    if (e.touches && e.touches.length > 1) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  document.addEventListener("gesturestart", function(e) {
+    e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener("gesturechange", function(e) {
+    e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener("gestureend", function(e) {
+    e.preventDefault();
+  }, { passive: false });
   function preventContext(e) { e.preventDefault(); }
 
   // ── Gallery mode: check FIRST before building the game ──────────────────────
@@ -808,7 +809,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   host.appendChild(app);
   injectGlobalUiStyles();
-  bindGameTouchLock();
   
   // ── Emergency recovery: triple-tap top-left corner ─────────────────
 (function setupEmergencyCornerReset() {
