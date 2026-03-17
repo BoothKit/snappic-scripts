@@ -104,12 +104,13 @@ document.addEventListener("DOMContentLoaded", function () {
     activeCardCount: 12,
     activeWinTarget: 1,
     theme: {
-      bg: "#0F1115",
-      accent: "#FFFFFF",
-      accentText: "#111111",
-      card: "#151821",
-      panel: "#1C1F27"
-    },
+  bg: "#0F1115",
+  accent: "#FFFFFF",
+  accentText: "#111111",
+  card: "#151821",
+  panel: "#1C1F27",
+  text: "#FFFFFF"
+},
     logoUrl: "https://theboothkit.com/wp-content/uploads/2026/02/Site-Logo.png",
     headerLogoUrl: "https://theboothkit.com/wp-content/uploads/2026/02/Site-Logo.png",
     headerLogoHeight: 56,
@@ -263,28 +264,37 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       #fp-top-right {
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 8px;
-      }
-      #fp-live-leaderboard {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        white-space: normal;
-        width: 100%;
-      }
-      #fp-top-meta {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px; /* ⬅ increased from 8px */
+}
+
+#fp-live-leaderboard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: normal;
+  width: 100%;
+}
+
+#fp-top-meta {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 16px; /* ⬅ increased from 10px */
   flex-wrap: wrap;
+}
+
+/* ── Bigger timer ── */
+#fp-timer {
+  font-size: 64px !important;
+  font-weight: 900 !important;
+  line-height: 1;
 }
 
 @keyframes fpShuffleShake {
@@ -294,6 +304,16 @@ document.addEventListener("DOMContentLoaded", function () {
   60% { transform: translateX(-6px); }
   80% { transform: translateX(6px); }
   100% { transform: translateX(0); }
+}
+
+@keyframes fpTimerDangerBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
+}
+
+#fp-timer.fp-danger {
+  color: #ff3b30 !important;
+  animation: fpTimerDangerBlink .9s linear infinite;
 }
 
 #fp-board.fp-reshuffle { animation: fpShuffleShake .35s ease; }
@@ -467,6 +487,26 @@ document.addEventListener("DOMContentLoaded", function () {
       .fp-inner {
         overflow: visible !important;
       }
+      /* ── Invisible top-right admin hotspot ── */
+#fp-admin {
+  position: fixed !important;
+  top: 10px !important;
+  right: 10px !important;
+  width: 96px !important;
+  height: 96px !important;
+  z-index: 999998 !important;
+
+  /* invisible but clickable */
+  opacity: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: transparent !important;
+
+  /* ensure interaction */
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+}
 
       @media (orientation: portrait) {
         #fp-keys { grid-template-columns: repeat(10,1fr) !important; }
@@ -665,21 +705,22 @@ document.addEventListener("DOMContentLoaded", function () {
 
               // ── Custom Colors ──
               '<div class="fp-admin-section fp-admin-section-full">' +
-                '<h3>Custom Colors</h3>' +
-                '<div class="fp-color-grid">' +
-                  '<div class="fp-color-row"><label>Background</label><input type="color" id="fp-color-bg-picker"><input type="text" id="fp-color-bg-text" class="fp-admin-text" placeholder="#0F1115"></div>' +
-                  '<div class="fp-color-row"><label>Accent / Buttons</label><input type="color" id="fp-color-accent-picker"><input type="text" id="fp-color-accent-text" class="fp-admin-text" placeholder="#FFFFFF"></div>' +
-                  '<div class="fp-color-row"><label>Accent Text</label><input type="color" id="fp-color-accent-text-picker"><input type="text" id="fp-color-accent-text-text" class="fp-admin-text" placeholder="#111111"></div>' +
-                  '<div class="fp-color-row"><label>Card Front</label><input type="color" id="fp-color-card-picker"><input type="text" id="fp-color-card-text" class="fp-admin-text" placeholder="#151821"></div>' +
-                  '<div class="fp-color-row"><label>Popup Panel</label><input type="color" id="fp-color-panel-picker"><input type="text" id="fp-color-panel-text" class="fp-admin-text" placeholder="#1C1F27"></div>' +
-                '</div>' +
-                '<div class="fp-admin-actions fp-admin-actions-wrap">' +
-                  '<button id="fp-apply-theme" type="button">Apply Colors</button>' +
-                  '<button id="fp-reset-theme" type="button" class="fp-admin-secondary">Reset Theme</button>' +
-                  '<button id="fp-reset-leaderboard" type="button" class="fp-admin-danger">Reset Leaderboard</button>' +
-                  '<button id="fp-reset-all" type="button" class="fp-admin-danger">Reset All Settings</button>' +
-                '</div>' +
-              '</div>' +
+  '<h3>Custom Colors</h3>' +
+  '<div class="fp-color-grid">' +
+    '<div class="fp-color-row"><label>Background</label><input type="color" id="fp-color-bg-picker"><input type="text" id="fp-color-bg-text" class="fp-admin-text" placeholder="#0F1115"></div>' +
+    '<div class="fp-color-row"><label>Main Text</label><input type="color" id="fp-color-text-picker"><input type="text" id="fp-color-text-text" class="fp-admin-text" placeholder="#FFFFFF"></div>' +
+    '<div class="fp-color-row"><label>Accent / Buttons</label><input type="color" id="fp-color-accent-picker"><input type="text" id="fp-color-accent-text" class="fp-admin-text" placeholder="#FFFFFF"></div>' +
+    '<div class="fp-color-row"><label>Accent Text</label><input type="color" id="fp-color-accent-text-picker"><input type="text" id="fp-color-accent-text-text" class="fp-admin-text" placeholder="#111111"></div>' +
+    '<div class="fp-color-row"><label>Card Front</label><input type="color" id="fp-color-card-picker"><input type="text" id="fp-color-card-text" class="fp-admin-text" placeholder="#151821"></div>' +
+    '<div class="fp-color-row"><label>Popup Panel</label><input type="color" id="fp-color-panel-picker"><input type="text" id="fp-color-panel-text" class="fp-admin-text" placeholder="#1C1F27"></div>' +
+  '</div>' +
+  '<div class="fp-admin-actions fp-admin-actions-wrap">' +
+    '<button id="fp-apply-theme" type="button">Apply Colors</button>' +
+    '<button id="fp-reset-theme" type="button" class="fp-admin-secondary">Reset Theme</button>' +
+    '<button id="fp-reset-leaderboard" type="button" class="fp-admin-danger">Reset Leaderboard</button>' +
+    '<button id="fp-reset-all" type="button" class="fp-admin-danger">Reset All Settings</button>' +
+  '</div>' +
+'</div>' +
 
               // ── Brand Assets ──
               '<div class="fp-admin-section">' +
@@ -768,6 +809,56 @@ document.addEventListener("DOMContentLoaded", function () {
 
   host.appendChild(app);
   injectGlobalUiStyles();
+  
+  // ── Emergency recovery: triple-tap top-left corner ─────────────────
+(function setupEmergencyCornerReset() {
+  let tapCount = 0;
+  let lastTapTime = 0;
+
+  function inHotspot(clientX, clientY) {
+    return clientX <= 120 && clientY <= 120;
+  }
+
+  function triggerEmergencyReset() {
+    tapCount = 0;
+
+    if (!window.confirm("Emergency reset all settings and reload?")) return;
+
+    localStorage.removeItem(STORAGE_KEYS.settings);
+    localStorage.removeItem(STORAGE_KEYS.leaderboard);
+    location.reload();
+  }
+
+  function handleTap(clientX, clientY) {
+    if (!inHotspot(clientX, clientY)) {
+      tapCount = 0;
+      return;
+    }
+
+    const now = Date.now();
+
+    if (now - lastTapTime > 700) {
+      tapCount = 0;
+    }
+
+    tapCount += 1;
+    lastTapTime = now;
+
+    if (tapCount >= 3) {
+      triggerEmergencyReset();
+    }
+  }
+
+  document.addEventListener("touchstart", function(e) {
+    const t = e.touches && e.touches[0];
+    if (!t) return;
+    handleTap(t.clientX, t.clientY);
+  }, { passive: true });
+
+  document.addEventListener("click", function(e) {
+    handleTap(e.clientX, e.clientY);
+  });
+})();
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Element refs
@@ -839,15 +930,17 @@ document.addEventListener("DOMContentLoaded", function () {
     boardGapRange: app.querySelector("#fp-board-gap-range"),
     boardGapValue: app.querySelector("#fp-board-gap-value"),
     bgPicker: app.querySelector("#fp-color-bg-picker"),
-    bgText: app.querySelector("#fp-color-bg-text"),
-    accentPicker: app.querySelector("#fp-color-accent-picker"),
-    accentText: app.querySelector("#fp-color-accent-text"),
-    accentTextPicker: app.querySelector("#fp-color-accent-text-picker"),
-    accentTextText: app.querySelector("#fp-color-accent-text-text"),
-    cardPicker: app.querySelector("#fp-color-card-picker"),
-    cardText: app.querySelector("#fp-color-card-text"),
-    panelPicker: app.querySelector("#fp-color-panel-picker"),
-    panelText: app.querySelector("#fp-color-panel-text"),
+bgText: app.querySelector("#fp-color-bg-text"),
+textPicker: app.querySelector("#fp-color-text-picker"),
+textText: app.querySelector("#fp-color-text-text"),
+accentPicker: app.querySelector("#fp-color-accent-picker"),
+accentText: app.querySelector("#fp-color-accent-text"),
+accentTextPicker: app.querySelector("#fp-color-accent-text-picker"),
+accentTextText: app.querySelector("#fp-color-accent-text-text"),
+cardPicker: app.querySelector("#fp-color-card-picker"),
+cardText: app.querySelector("#fp-color-card-text"),
+panelPicker: app.querySelector("#fp-color-panel-picker"),
+panelText: app.querySelector("#fp-color-panel-text"),
     applyTheme: app.querySelector("#fp-apply-theme"),
     resetTheme: app.querySelector("#fp-reset-theme"),
     resetLeaderboard: app.querySelector("#fp-reset-leaderboard"),
@@ -1435,12 +1528,13 @@ positionOverlaysOnBoard();
     state.roundDifficulty = ROUND_DIFFICULTIES.indexOf(saved.roundDifficulty)>-1 ? saved.roundDifficulty : DEFAULTS.roundDifficulty;
     if (saved.theme&&typeof saved.theme==="object") {
       state.theme = {
-        bg: normalizeHex(saved.theme.bg, DEFAULTS.theme.bg),
-        accent: normalizeHex(saved.theme.accent, DEFAULTS.theme.accent),
-        accentText: normalizeHex(saved.theme.accentText, DEFAULTS.theme.accentText),
-        card: normalizeHex(saved.theme.card, DEFAULTS.theme.card),
-        panel: normalizeHex(saved.theme.panel, DEFAULTS.theme.panel)
-      };
+  bg: normalizeHex(saved.theme.bg, DEFAULTS.theme.bg),
+  accent: normalizeHex(saved.theme.accent, DEFAULTS.theme.accent),
+  accentText: normalizeHex(saved.theme.accentText, DEFAULTS.theme.accentText),
+  card: normalizeHex(saved.theme.card, DEFAULTS.theme.card),
+  panel: normalizeHex(saved.theme.panel, DEFAULTS.theme.panel),
+  text: normalizeHex(saved.theme.text, DEFAULTS.theme.text)
+};
     }
     state.logoUrl = (typeof saved.logoUrl==="string"&&saved.logoUrl.trim()) ? saved.logoUrl : DEFAULTS.logoUrl;
     state.headerLogoUrl = (typeof saved.headerLogoUrl==="string"&&saved.headerLogoUrl.trim()) ? saved.headerLogoUrl : DEFAULTS.headerLogoUrl;
@@ -1482,47 +1576,148 @@ positionOverlaysOnBoard();
   }
 
   function applyThemeColors(colors) {
-    const bg=normalizeHex(colors.bg,DEFAULTS.theme.bg), accent=normalizeHex(colors.accent,DEFAULTS.theme.accent),
-      accentText=normalizeHex(colors.accentText,DEFAULTS.theme.accentText),
-      card=normalizeHex(colors.card,DEFAULTS.theme.card), panel=normalizeHex(colors.panel,DEFAULTS.theme.panel);
-    state.theme = { bg, accent, accentText, card, panel };
-    app.style.setProperty("--fp-bg", bg);
-    app.style.setProperty("--fp-text", "#FFFFFF");
-    app.style.setProperty("--fp-panel", hexToRgba(panel, 0.88));
-    app.style.setProperty("--fp-panel-border", hexToRgba(panel, 1));
-    app.style.setProperty("--fp-panel-solid", panel);
-    app.style.setProperty("--fp-card-front", card);
-    app.style.setProperty("--fp-card-front-border", hexToRgba("#FFFFFF", 0.1));
-    app.style.setProperty("--fp-chip-bg", hexToRgba("#FFFFFF", 0.1));
-    app.style.setProperty("--fp-chip-border", hexToRgba("#FFFFFF", 0.18));
-    app.style.setProperty("--fp-overlay", hexToRgba(bg, 0.48));
-    app.style.setProperty("--fp-countdown-overlay", hexToRgba(bg, 0.72));
-    app.style.setProperty("--fp-key-bg", hexToRgba("#FFFFFF", 0.08));
-    app.style.setProperty("--fp-key-border", hexToRgba("#FFFFFF", 0.14));
-    app.style.setProperty("--fp-accent", accent);
-    app.style.setProperty("--fp-accent-text", accentText);
-    app.style.setProperty("--fp-match-ring", hexToRgba(accent, 0.95));
-    app.style.setProperty("--fp-match-glow", hexToRgba(accent, 0.45));
-    syncColorInputsFromTheme();
-    persistSettings();
-  }
+  const bg = normalizeHex(colors.bg, DEFAULTS.theme.bg);
+  const accent = normalizeHex(colors.accent, DEFAULTS.theme.accent);
+  const accentText = normalizeHex(colors.accentText, DEFAULTS.theme.accentText);
+  const card = normalizeHex(colors.card, DEFAULTS.theme.card);
+  const panel = normalizeHex(colors.panel, DEFAULTS.theme.panel);
+  const text = normalizeHex(colors.text, DEFAULTS.theme.text);
+
+  state.theme = { bg, accent, accentText, card, panel, text };
+
+  app.style.setProperty("--fp-bg", bg);
+  app.style.setProperty("--fp-text", text);
+  app.style.setProperty("--fp-panel", hexToRgba(panel, 0.88));
+  app.style.setProperty("--fp-panel-border", hexToRgba(panel, 1));
+  app.style.setProperty("--fp-panel-solid", panel);
+  app.style.setProperty("--fp-card-front", card);
+  app.style.setProperty("--fp-card-front-border", hexToRgba("#FFFFFF", 0.1));
+  app.style.setProperty("--fp-chip-bg", hexToRgba("#FFFFFF", 0.1));
+  app.style.setProperty("--fp-chip-border", hexToRgba("#FFFFFF", 0.18));
+  app.style.setProperty("--fp-overlay", hexToRgba(bg, 0.48));
+  app.style.setProperty("--fp-countdown-overlay", hexToRgba(bg, 0.72));
+  app.style.setProperty("--fp-key-bg", hexToRgba("#FFFFFF", 0.08));
+  app.style.setProperty("--fp-key-border", hexToRgba("#FFFFFF", 0.14));
+  app.style.setProperty("--fp-accent", accent);
+  app.style.setProperty("--fp-accent-text", accentText);
+  app.style.setProperty("--fp-match-ring", hexToRgba(accent, 0.95));
+  app.style.setProperty("--fp-match-glow", hexToRgba(accent, 0.45));
+
+  syncColorInputsFromTheme();
+}
 
   function applyThemePreset(name) {
-    if (name==="dark") applyThemeColors({bg:"#0F1115",accent:"#FFFFFF",accentText:"#111111",card:"#151821",panel:"#1C1F27"});
-    else if (name==="purple") applyThemeColors({bg:"#0D1320",accent:"#6852F4",accentText:"#FFFFFF",card:"#11182B",panel:"#1A2040"});
-    else if (name==="gold") applyThemeColors({bg:"#101010",accent:"#D4AF37",accentText:"#111111",card:"#171717",panel:"#23201A"});
+  if (name==="dark") {
+    applyThemeColors({
+      bg:"#0F1115",
+      accent:"#FFFFFF",
+      accentText:"#111111",
+      card:"#151821",
+      panel:"#1C1F27",
+      text:"#FFFFFF"
+    });
+  } else if (name==="purple") {
+    applyThemeColors({
+      bg:"#0D1320",
+      accent:"#6852F4",
+      accentText:"#FFFFFF",
+      card:"#11182B",
+      panel:"#1A2040",
+      text:"#FFFFFF"
+    });
+  } else if (name==="gold") {
+    applyThemeColors({
+      bg:"#101010",
+      accent:"#D4AF37",
+      accentText:"#111111",
+      card:"#171717",
+      panel:"#23201A",
+      text:"#F5E7C2"
+    });
   }
+}
 
   function syncColorInputsFromTheme() {
-    el.bgPicker.value=state.theme.bg; el.bgText.value=state.theme.bg;
-    el.accentPicker.value=state.theme.accent; el.accentText.value=state.theme.accent;
-    el.accentTextPicker.value=state.theme.accentText; el.accentTextText.value=state.theme.accentText;
-    el.cardPicker.value=state.theme.card; el.cardText.value=state.theme.card;
-    el.panelPicker.value=state.theme.panel; el.panelText.value=state.theme.panel;
-  }
+  el.bgPicker.value = state.theme.bg;
+  el.bgText.value = state.theme.bg;
+
+  el.accentPicker.value = state.theme.accent;
+  el.accentText.value = state.theme.accent;
+
+  el.accentTextPicker.value = state.theme.accentText;
+  el.accentTextText.value = state.theme.accentText;
+
+  el.cardPicker.value = state.theme.card;
+  el.cardText.value = state.theme.card;
+
+  el.panelPicker.value = state.theme.panel;
+  el.panelText.value = state.theme.panel;
+
+  el.textPicker.value = state.theme.text;
+  el.textText.value = state.theme.text;
+}
 
   function applyCursorMode() {
     app.classList.toggle("fp-show-cursor", !!state.showCursor);
+  }
+  
+    function syncAllVisualsImmediately(options) {
+    options = options || {};
+
+    const preserveMatched = !!options.preserveMatched;
+    const rerenderBoard = options.rerenderBoard !== false;
+    const boardShowAll = typeof options.showAll === "boolean"
+      ? options.showAll
+      : (!state.gameActive && state.idlePreview);
+
+    // Re-apply all visual/state-driven UI immediately
+    applyLogo(state.logoUrl);
+    applyHeaderLogo(state.headerLogoUrl || DEFAULTS.headerLogoUrl);
+    applyHeaderLogoLayout();
+    applyHudOffset();
+    applyBoardOffset();
+    applyBoardAreaSizing();
+    applyBackgroundImage(state.bgImageUrl);
+    applyCustomFont(state.customFontDataUrl, state.customFontFileName);
+    applyCursorMode();
+
+    // Re-apply theme last so CSS vars are definitely current
+    app.style.setProperty("--fp-bg", state.theme.bg);
+    app.style.setProperty("--fp-text", state.theme.text);
+    app.style.setProperty("--fp-panel", hexToRgba(state.theme.panel, 0.88));
+    app.style.setProperty("--fp-panel-border", hexToRgba(state.theme.panel, 1));
+    app.style.setProperty("--fp-panel-solid", state.theme.panel);
+    app.style.setProperty("--fp-card-front", state.theme.card);
+    app.style.setProperty("--fp-card-front-border", hexToRgba("#FFFFFF", 0.1));
+    app.style.setProperty("--fp-chip-bg", hexToRgba("#FFFFFF", 0.1));
+    app.style.setProperty("--fp-chip-border", hexToRgba("#FFFFFF", 0.18));
+    app.style.setProperty("--fp-overlay", hexToRgba(state.theme.bg, 0.48));
+    app.style.setProperty("--fp-countdown-overlay", hexToRgba(state.theme.bg, 0.72));
+    app.style.setProperty("--fp-key-bg", hexToRgba("#FFFFFF", 0.08));
+    app.style.setProperty("--fp-key-border", hexToRgba("#FFFFFF", 0.14));
+    app.style.setProperty("--fp-accent", state.theme.accent);
+    app.style.setProperty("--fp-accent-text", state.theme.accentText);
+    app.style.setProperty("--fp-match-ring", hexToRgba(state.theme.accent, 0.95));
+    app.style.setProperty("--fp-match-glow", hexToRgba(state.theme.accent, 0.45));
+
+    syncColorInputsFromTheme();
+    updateSettingsUI();
+    updateRoundPill();
+    updateTitleForCurrentTarget();
+    updateBoardShellMode();
+
+    // Keep timer display in sync immediately
+    setTimerDisplay(state.gameActive ? state.activeRoundTime : state.roundTime);
+
+    // Force board layout/UI to update now, even if no new round/idle refresh happens
+    applyBoardLayout();
+
+    if (rerenderBoard && state.deck && state.deck.length) {
+      renderBoard(boardShowAll, preserveMatched && state.gameActive);
+    }
+
+    cacheBoardRect();
+    positionOverlaysOnBoard();
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1745,7 +1940,10 @@ positionOverlaysOnBoard();
   // ─────────────────────────────────────────────────────────────────────────────
   // Timer
   // ─────────────────────────────────────────────────────────────────────────────
-  function setTimerDisplay(v) { el.timer.textContent=String(v); }
+  function setTimerDisplay(v) {
+  el.timer.textContent = String(v);
+  el.timer.classList.toggle("fp-danger", Number(v) <= 10);
+}
 
   function startRoundTimer() {
     let remaining=state.activeRoundTime;
@@ -2289,6 +2487,34 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
 
     updateTitleForCurrentTarget();
   }
+  
+    async function rebuildBoardNow(withAnimation) {
+    const deck = await buildDeck(state.cardCount);
+
+    if (!deck || !deck.length) {
+      console.warn("Could not rebuild board immediately. Keeping current board.");
+      return;
+    }
+
+    state.deck = deck;
+    state.activeCardCount = state.cardCount;
+    state.activeWinTarget = getActiveWinTargetForDeck(state.activeCardCount, state.currentRound);
+
+    if (!state.gameActive) {
+      if (withAnimation) {
+        animateBoardRefresh(state.idlePreview);
+      } else {
+        renderBoard(state.idlePreview, false);
+      }
+    } else {
+      renderBoard(false, true);
+    }
+
+    updateRoundPill();
+    updateTitleForCurrentTarget();
+    cacheBoardRect();
+    positionOverlaysOnBoard();
+  }
 
   async function startConfiguredRound() {
     stopIdleRefreshTimer();
@@ -2369,20 +2595,42 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
   // ─────────────────────────────────────────────────────────────────────────────
   // Reset all
   // ─────────────────────────────────────────────────────────────────────────────
-  function resetAllSettings() {
+    async function resetAllSettings() {
     if (!window.confirm("Are you sure you want to reset all settings, custom colors, custom images, logos, font, PIN, and leaderboard?")) return;
+
     localStorage.removeItem(STORAGE_KEYS.settings);
     localStorage.removeItem(STORAGE_KEYS.leaderboard);
-    localStorage.removeItem(STORAGE_KEYS.cachedGalleryUrls);
-    localStorage.removeItem(STORAGE_KEYS.cachedLastDeck);
-    Object.assign(state, JSON.parse(JSON.stringify(DEFAULTS)));
+
+    const freshDefaults = JSON.parse(JSON.stringify(DEFAULTS));
+    Object.keys(state).forEach(function(key) { delete state[key]; });
+    Object.assign(state, freshDefaults);
+
     resetRoundState();
-    applyThemeColors(state.theme); applyLogo(state.logoUrl); applyHeaderLogo(state.headerLogoUrl);
-    applyHeaderLogoLayout(); applyHudOffset(); applyBoardOffset(); applyBoardAreaSizing();
-    applyBackgroundImage(state.bgImageUrl); applyCustomFont("","");
-    renderLeaderboard(); updateSettingsUI(); applyCursorMode(); updateRoundPill(); updateTitleForCurrentTarget();
-    setTimerDisplay(state.roundTime); startIdleRefreshTimer();
-    if (!state.gameActive&&state.deck.length) renderBoard(state.idlePreview,false);
+    clearTimeout(state.autoBackTimer);
+    clearTimeout(state.nameEntryTimer);
+    clearInterval(state.roundTimerId);
+    stopIdleRefreshTimer();
+
+    state.firstCard = null;
+    state.lockBoard = false;
+    state.matchedPairs = 0;
+    state.gameActive = false;
+
+    el.center.classList.add("hidden");
+    hideCountdown(true);
+    el.roundTransition.classList.remove("show");
+    el.roundTransition.classList.add("hidden");
+    el.play.classList.remove("hidden");
+
+    renderLeaderboard();
+    syncAllVisualsImmediately({
+      rerenderBoard: false
+    });
+
+    await rebuildBoardNow(false);
+
+    persistSettings();
+    startIdleRefreshTimer();
   }
 
   function handleImageUpload(file,onLoad) {
@@ -2416,18 +2664,36 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
     el.settingsTransferStatus.textContent="Settings JSON exported.";
   }
 
-  function importSettingsFromJsonText(text) {
+    async function importSettingsFromJsonText(text) {
     let parsed;
-    try { parsed=JSON.parse(text); } catch(e){ alert("That file is not valid JSON."); return; }
-    const incoming=parsed&&parsed.settings?parsed.settings:parsed;
-    if (!incoming||typeof incoming!=="object") { alert("That JSON file does not contain valid settings."); return; }
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      alert("That file is not valid JSON.");
+      return;
+    }
+
+    const incoming = parsed && parsed.settings ? parsed.settings : parsed;
+    if (!incoming || typeof incoming !== "object") {
+      alert("That JSON file does not contain valid settings.");
+      return;
+    }
+
     applySettingsObject(incoming);
-    applyThemeColors(state.theme); applyLogo(state.logoUrl); applyHeaderLogo(state.headerLogoUrl);
-    applyHeaderLogoLayout(); applyHudOffset(); applyBoardOffset(); applyBoardAreaSizing();
-    applyBackgroundImage(state.bgImageUrl); applyCustomFont(state.customFontDataUrl,state.customFontFileName);
-    updateSettingsUI(); applyCursorMode(); updateRoundPill(); updateTitleForCurrentTarget(); persistSettings();
-    if (!state.gameActive) { setTimerDisplay(state.roundTime); if (state.deck.length) renderBoard(state.idlePreview,false); startIdleRefreshTimer(); }
-    el.settingsTransferStatus.textContent="Settings JSON imported successfully.";
+
+    syncAllVisualsImmediately({
+      rerenderBoard: false
+    });
+
+    await rebuildBoardNow(false);
+
+    persistSettings();
+
+    if (!state.gameActive) {
+      startIdleRefreshTimer();
+    }
+
+    el.settingsTransferStatus.textContent = "Settings JSON imported successfully.";
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -2559,13 +2825,18 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
     };
   });
 
-  el.cardCountButtons.forEach(function(b){
-    b.onclick=function(){
-      const v=parseInt(b.getAttribute("data-card-count"),10);
-      if (v===30 && state.roundDifficulty==="moreCards") return;
-      state.cardCount=v;
-      state.activeCardCount=state.cardCount;
-      updateSettingsUI(); persistSettings(); prepareDeck(true);
+    el.cardCountButtons.forEach(function(b){
+    b.onclick = async function(){
+      const v = parseInt(b.getAttribute("data-card-count"), 10);
+      if (v === 30 && state.roundDifficulty === "moreCards") return;
+
+      state.cardCount = v;
+      state.activeCardCount = state.cardCount;
+      state.activeWinTarget = getActiveWinTargetForDeck(state.cardCount, state.currentRound);
+
+      updateSettingsUI();
+      persistSettings();
+      await rebuildBoardNow(true);
     };
   });
 
@@ -2646,20 +2917,41 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
 
   el.showCursorInput.addEventListener("change",function(){ state.showCursor=el.showCursorInput.checked; applyCursorMode(); persistSettings(); });
 
-  el.presetButtons.forEach(function(b){ b.onclick=function(){ applyThemePreset(b.getAttribute("data-preset")); }; });
-
-  bindColorPair(el.bgPicker,el.bgText,DEFAULTS.theme.bg);
-  bindColorPair(el.accentPicker,el.accentText,DEFAULTS.theme.accent);
-  bindColorPair(el.accentTextPicker,el.accentTextText,DEFAULTS.theme.accentText);
-  bindColorPair(el.cardPicker,el.cardText,DEFAULTS.theme.card);
-  bindColorPair(el.panelPicker,el.panelText,DEFAULTS.theme.panel);
-
-  el.applyTheme.onclick=function(){
-    applyThemeColors({bg:el.bgText.value,accent:el.accentText.value,accentText:el.accentTextText.value,card:el.cardText.value,panel:el.panelText.value});
+  el.presetButtons.forEach(function(b){
+  b.onclick = function(){
+    applyThemePreset(b.getAttribute("data-preset"));
+    persistSettings();
   };
-  el.resetTheme.onclick=function(){ applyThemePreset("dark"); };
-  el.resetLeaderboard.onclick=function(){ if (window.confirm("Are you sure you want to reset the leaderboard?")) clearLeaderboard(); };
-  el.resetAll.onclick=resetAllSettings;
+});
+ bindColorPair(el.bgPicker,el.bgText,DEFAULTS.theme.bg);
+bindColorPair(el.accentPicker,el.accentText,DEFAULTS.theme.accent);
+bindColorPair(el.accentTextPicker,el.accentTextText,DEFAULTS.theme.accentText);
+bindColorPair(el.cardPicker,el.cardText,DEFAULTS.theme.card);
+bindColorPair(el.panelPicker,el.panelText,DEFAULTS.theme.panel);
+bindColorPair(el.textPicker,el.textText,DEFAULTS.theme.text);
+
+  el.applyTheme.onclick = function(){
+  applyThemeColors({
+    bg: el.bgText.value,
+    accent: el.accentText.value,
+    accentText: el.accentTextText.value,
+    card: el.cardText.value,
+    panel: el.panelText.value,
+    text: el.textText.value
+  });
+  persistSettings();
+};
+
+el.resetTheme.onclick = function(){
+  applyThemePreset("dark");
+  persistSettings();
+};
+
+el.resetLeaderboard.onclick = function(){
+  if (window.confirm("Are you sure you want to reset the leaderboard?")) clearLeaderboard();
+};
+
+el.resetAll.onclick = resetAllSettings;
 
   el.logoUpload.addEventListener("change",function(){
     const f=el.logoUpload.files&&el.logoUpload.files[0];
