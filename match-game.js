@@ -4,27 +4,43 @@ document.addEventListener("DOMContentLoaded", function () {
   const game = document.getElementById("fp-game");
   if (!game) return;
 
+  const TOP_SAFE_ZONE = 120;
+
+  function isInTopSafeZone(e) {
+    const touch =
+      (e.touches && e.touches[0]) ||
+      (e.changedTouches && e.changedTouches[0]);
+
+    if (!touch) return false;
+    return touch.clientY <= TOP_SAFE_ZONE;
+  }
+
   game.addEventListener("touchstart", function(e) {
+    if (isInTopSafeZone(e)) return;
     if (e.touches && e.touches.length > 1) {
       e.preventDefault();
     }
   }, { passive: false });
 
   game.addEventListener("touchmove", function(e) {
+    if (isInTopSafeZone(e)) return;
     if (e.touches && e.touches.length > 1) {
       e.preventDefault();
     }
   }, { passive: false });
 
   game.addEventListener("gesturestart", function(e) {
+    if (isInTopSafeZone(e)) return;
     e.preventDefault();
   }, { passive: false });
 
   game.addEventListener("gesturechange", function(e) {
+    if (isInTopSafeZone(e)) return;
     e.preventDefault();
   }, { passive: false });
 
   game.addEventListener("gestureend", function(e) {
+    if (isInTopSafeZone(e)) return;
     e.preventDefault();
   }, { passive: false });
 }
