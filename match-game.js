@@ -15,33 +15,11 @@ document.addEventListener("DOMContentLoaded", function () {
     return touch.clientY <= TOP_SAFE_ZONE;
   }
 
-  game.addEventListener("touchstart", function(e) {
-    if (isInTopSafeZone(e)) return;
-    if (e.touches && e.touches.length > 1) {
-      e.preventDefault();
-    }
-  }, { passive: false });
-
   game.addEventListener("touchmove", function(e) {
     if (isInTopSafeZone(e)) return;
     if (e.touches && e.touches.length > 1) {
       e.preventDefault();
     }
-  }, { passive: false });
-
-  game.addEventListener("gesturestart", function(e) {
-    if (isInTopSafeZone(e)) return;
-    e.preventDefault();
-  }, { passive: false });
-
-  game.addEventListener("gesturechange", function(e) {
-    if (isInTopSafeZone(e)) return;
-    e.preventDefault();
-  }, { passive: false });
-
-  game.addEventListener("gestureend", function(e) {
-    if (isInTopSafeZone(e)) return;
-    e.preventDefault();
   }, { passive: false });
 }
   function preventContext(e) { e.preventDefault(); }
