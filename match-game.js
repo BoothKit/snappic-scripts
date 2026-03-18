@@ -487,6 +487,18 @@ document.addEventListener("DOMContentLoaded", function () {
       .fp-inner {
         overflow: visible !important;
       }
+       .fp-face.fp-back {
+        background: var(--fp-card-front) !important;
+      }
+      .fp-face.fp-back img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 1;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+      }
       /* ── Invisible top-right admin hotspot ── */
 #fp-admin {
   position: fixed !important;
@@ -1150,22 +1162,40 @@ panelText: app.querySelector("#fp-color-panel-text"),
       return new Promise(function(resolve) {
         const img = new Image();
 
-        function done() {
-          resolve();
+        function finish() {
+          if (typeof img.decode === "function") {
+            img.decode().then(resolve).catch(resolve);
+          } else {
+            resolve();
+          }
         }
 
-        img.onload = done;
-        img.onerror = done;
-
+        img.onload = finish;
+        img.onerror = resolve;
         img.src = src;
 
         if (img.complete) {
-          resolve();
+          finish();
         }
       });
     })
   );
 }
+  
+function preloadDeckImagesWithTimeout(deck, timeoutMs) {
+  timeoutMs = timeoutMs || 3000;
+
+  return Promise.race([
+    preloadDeckImages(deck).then(function() {
+      return { ok: true, timedOut: false };
+    }),
+    new Promise(function(resolve) {
+      setTimeout(function() {
+        resolve({ ok: false, timedOut: true });
+      }, timeoutMs);
+    })
+  ]);
+}  
 
   function slugifyFontName(name) {
     return String(name || "Custom Font")
@@ -2246,22 +2276,37 @@ positionOverlaysOnBoard();
     });
   }
 
-  function animateBoardRefresh(nextShowAll) {
-  const pendingDeck = state.deck ? state.deck.slice() : [];
+  async function animateBoardRefresh(nextDeck, nextShowAll) {
+  const pendingDeck = Array.isArray(nextDeck) ? nextDeck.slice() : [];
+  if (!pendingDeck.length) return false;
+
+  const preloadResult = await preloadDeckImagesWithTimeout(pendingDeck, 3000);
+
+  // If new images are not ready in time, keep current board visible
+  if (!preloadResult.ok) {
+    console.warn("Idle refresh skipped because images were not ready in time.");
+    return false;
+  }
+
+  state.deck = pendingDeck;
+  state.activeCardCount = state.cardCount;
+  state.activeWinTarget = getActiveWinTargetForDeck(state.activeCardCount, state.currentRound);
 
   el.board.classList.add("fp-refresh-out");
 
-  preloadDeckImages(pendingDeck).then(function() {
-    setTimeout(function() {
-      renderBoard(nextShowAll, false);
-      el.board.classList.remove("fp-refresh-out");
-      el.board.classList.add("fp-refresh-in");
-
-      setTimeout(function() {
-        el.board.classList.remove("fp-refresh-in");
-      }, 380);
-    }, 220);
+  await new Promise(function(resolve) {
+    setTimeout(resolve, 120);
   });
+
+  renderBoard(nextShowAll, false);
+  el.board.classList.remove("fp-refresh-out");
+  el.board.classList.add("fp-refresh-in");
+
+  setTimeout(function() {
+    el.board.classList.remove("fp-refresh-in");
+  }, 260);
+
+  return true;
 }
 
   function rerenderBoardForColumnChange() {
@@ -2467,105 +2512,148 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
   }
 
     async function prepareDeck(withAnimation) {
-    const deck = await buildDeck(state.cardCount);
+  const deck = await buildDeck(state.cardCount);
 
-    // No-blank-board behavior:
-    // if deck build fails, keep the currently visible deck untouched
-    if (!deck || !deck.length) {
-      console.warn("No deck could be built. Keeping current board.");
-      return;
-    }
-
-    state.deck = deck;
-    state.activeCardCount = state.cardCount;
-    state.activeWinTarget = getActiveWinTargetForDeck(state.activeCardCount, state.currentRound);
-
-    if (!state.gameActive) {
-      if (withAnimation) animateBoardRefresh(state.idlePreview);
-      else renderBoard(state.idlePreview, false);
-    }
-
-    updateTitleForCurrentTarget();
+  // No-blank-board behavior:
+  // if deck build fails, keep the currently visible deck untouched
+  if (!deck || !deck.length) {
+    console.warn("No deck could be built. Keeping current board.");
+    return;
   }
+
+  if (!state.gameActive) {
+    if (withAnimation) {
+      const swapped = await animateBoardRefresh(deck, state.idlePreview);
+      if (!swapped) return;
+    } else {
+      state.deck = deck;
+      state.activeCardCount = state.cardCount;
+      state.activeWinTarget = getActiveWinTargetForDeck(state.activeCardCount, state.currentRound);
+      renderBoard(state.idlePreview, false);
+    }
+  }
+
+  updateTitleForCurrentTarget();
+}
   
     async function rebuildBoardNow(withAnimation) {
-    const deck = await buildDeck(state.cardCount);
+  const deck = await buildDeck(state.cardCount);
 
-    if (!deck || !deck.length) {
-      console.warn("Could not rebuild board immediately. Keeping current board.");
+  if (!deck || !deck.length) {
+    console.warn("Could not rebuild board immediately. Keeping current board.");
+    return;
+  }
+
+  if (!state.gameActive) {
+    if (withAnimation) {
+      await animateBoardRefresh(deck, state.idlePreview);
+    } else {
+      const preloadResult = await preloadDeckImagesWithTimeout(deck, 3000);
+      if (!preloadResult.ok) {
+        console.warn("Rebuild skipped because images were not ready in time.");
+        return;
+      }
+
+      state.deck = deck;
+      state.activeCardCount = state.cardCount;
+      state.activeWinTarget = getActiveWinTargetForDeck(state.activeCardCount, state.currentRound);
+      renderBoard(state.idlePreview, false);
+    }
+  } else {
+    const preloadResult = await preloadDeckImagesWithTimeout(deck, 3000);
+    if (!preloadResult.ok) {
+      console.warn("In-game rebuild skipped because images were not ready in time.");
       return;
     }
 
     state.deck = deck;
     state.activeCardCount = state.cardCount;
     state.activeWinTarget = getActiveWinTargetForDeck(state.activeCardCount, state.currentRound);
-
-    if (!state.gameActive) {
-      if (withAnimation) {
-        animateBoardRefresh(state.idlePreview);
-      } else {
-        renderBoard(state.idlePreview, false);
-      }
-    } else {
-      renderBoard(false, true);
-    }
-
-    updateRoundPill();
-    updateTitleForCurrentTarget();
-    cacheBoardRect();
-    positionOverlaysOnBoard();
+    renderBoard(false, true);
   }
+
+  updateRoundPill();
+  updateTitleForCurrentTarget();
+  cacheBoardRect();
+  positionOverlaysOnBoard();
+}
 
   async function startConfiguredRound() {
-    stopIdleRefreshTimer();
-    const rc=getRoundConfig(state.currentRound);
-    state.activeRoundTime=rc.timer; state.activeCardCount=rc.cardCount;
-    state.matchedPairs=0; state.misses=0; state.gameActive=false; state.firstCard=null; state.lockBoard=true;
+  stopIdleRefreshTimer();
 
-    // Cache board position NOW before any animation changes the layout
-    cacheBoardRect();
+  const rc = getRoundConfig(state.currentRound);
+  state.activeRoundTime = rc.timer;
+  state.activeCardCount = rc.cardCount;
+  state.matchedPairs = 0;
+  state.misses = 0;
+  state.gameActive = false;
+  state.firstCard = null;
+  state.lockBoard = true;
 
-    // Fade the existing board out smoothly before loading new deck
-    el.board.classList.add("fp-refresh-out");
+  cacheBoardRect();
 
-        const nextDeck = await buildDeck(state.activeCardCount);
+  const nextDeck = await buildDeck(state.activeCardCount);
 
-    // No-blank-board behavior:
-    // if we cannot build a new deck, keep the old board and return to idle
-    if (!nextDeck || !nextDeck.length) {
-      console.warn("Could not build round deck. Keeping current board.");
-      el.board.classList.remove("fp-refresh-out");
-      goIdle();
-      return;
-    }
-
-    state.deck = nextDeck;
-    state.activeWinTarget = getActiveWinTargetForDeck(state.deck.length, state.currentRound);
-    updateRoundPill(); updateTitleForCurrentTarget();
-    el.center.classList.add("hidden"); el.play.classList.add("hidden");
-
-    // Slight pause so the fade-out is visible, then render new board
-    await new Promise(function(res){ setTimeout(res, 220); });
-    renderBoard(state.startPreview, false);
-    el.board.classList.remove("fp-refresh-out");
-    el.board.classList.add("fp-refresh-in");
-    setTimeout(function(){ el.board.classList.remove("fp-refresh-in"); }, 380);
-
-    updateBoardShellMode();
-
-    runCountdown(function(){
-      // Stagger cards flipping face-down for a nicer hide
-      const cards = [...el.board.children].filter(function(c){ return !c.classList.contains("matched"); });
-      cards.forEach(function(c, i){
-        setTimeout(function(){ c.classList.remove("show"); }, i * 30);
-      });
-      const staggerDuration = cards.length * 30 + 80;
-      setTimeout(function(){
-        state.roundStartedAt=Date.now(); state.lockBoard=false; state.gameActive=true;
-        updateBoardShellMode(); startRoundTimer();
-      }, staggerDuration);
-    });
+  if (!nextDeck || !nextDeck.length) {
+    console.warn("Could not build round deck. Keeping current board.");
+    goIdle();
+    return;
   }
+
+  const preloadResult = await preloadDeckImagesWithTimeout(nextDeck, 4000);
+
+  // Round start should wait longer than idle. If still not ready, fall back.
+  if (!preloadResult.ok) {
+    console.warn("Round deck images were not ready in time. Falling back to idle.");
+    goIdle();
+    return;
+  }
+
+  state.deck = nextDeck;
+  state.activeWinTarget = getActiveWinTargetForDeck(state.deck.length, state.currentRound);
+  updateRoundPill();
+  updateTitleForCurrentTarget();
+
+  el.center.classList.add("hidden");
+  el.play.classList.add("hidden");
+
+  el.board.classList.add("fp-refresh-out");
+
+  await new Promise(function(res) {
+    setTimeout(res, 120);
+  });
+
+  renderBoard(state.startPreview, false);
+
+  el.board.classList.remove("fp-refresh-out");
+  el.board.classList.add("fp-refresh-in");
+  setTimeout(function() {
+    el.board.classList.remove("fp-refresh-in");
+  }, 260);
+
+  updateBoardShellMode();
+
+  runCountdown(function() {
+    const cards = [...el.board.children].filter(function(c) {
+      return !c.classList.contains("matched");
+    });
+
+    cards.forEach(function(c, i) {
+      setTimeout(function() {
+        c.classList.remove("show");
+      }, i * 30);
+    });
+
+    const staggerDuration = cards.length * 30 + 80;
+    setTimeout(function() {
+      state.roundStartedAt = Date.now();
+      state.lockBoard = false;
+      state.gameActive = true;
+      updateBoardShellMode();
+      startRoundTimer();
+    }, staggerDuration);
+  });
+}
 
   async function startGame() {
     if (state.playerName.length<2) return;
