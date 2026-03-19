@@ -1135,6 +1135,34 @@ function reshuffleHeldBoardIntoState() {
   return true;
 }
 
+// ⬇️ ADD IT RIGHT HERE
+async function animateHeldBoardReshuffle(showAll, preserveMatched) {
+  if (!reshuffleHeldBoardIntoState() && !restoreHeldBoardIntoState()) {
+    console.warn("No held board available to reshuffle.");
+    return false;
+  }
+
+  state.activeCardCount = state.deck.length || state.cardCount;
+  state.activeWinTarget = getActiveWinTargetForDeck(state.activeCardCount, state.currentRound);
+
+  el.board.classList.add("fp-refresh-out");
+
+  await new Promise(function(resolve) {
+    setTimeout(resolve, 120);
+  });
+
+  renderBoard(!!showAll, !!preserveMatched);
+
+  el.board.classList.remove("fp-refresh-out");
+  el.board.classList.add("fp-refresh-in");
+
+  setTimeout(function() {
+    el.board.classList.remove("fp-refresh-in");
+  }, 260);
+
+  return true;
+}
+
   function saveCachedGalleryUrls(urls) {
     try {
       localStorage.setItem(STORAGE_KEYS.cachedGalleryUrls, JSON.stringify(urls || []));
