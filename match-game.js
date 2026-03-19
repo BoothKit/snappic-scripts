@@ -2581,17 +2581,17 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
 
     async function prepareDeck(withAnimation) {
   if (navigator.onLine === false) {
-    enableOfflineHold();
+  enableOfflineHold();
 
-    if (reshuffleHeldBoardIntoState() && !state.gameActive) {
-      renderBoard(state.idlePreview, false);
-      updateTitleForCurrentTarget();
-      cacheBoardRect();
-      positionOverlaysOnBoard();
-    }
-
-    return;
+  if (!state.gameActive) {
+    await animateHeldBoardReshuffle(state.idlePreview, false);
+    updateTitleForCurrentTarget();
+    cacheBoardRect();
+    positionOverlaysOnBoard();
   }
+
+  return;
+}
 
   const deck = await buildDeck(state.cardCount);
 
@@ -2627,18 +2627,20 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
   
     async function rebuildBoardNow(withAnimation) {
   if (navigator.onLine === false) {
-    enableOfflineHold();
+  enableOfflineHold();
 
-    if (reshuffleHeldBoardIntoState()) {
-      renderBoard(state.gameActive ? false : state.idlePreview, state.gameActive);
-      updateRoundPill();
-      updateTitleForCurrentTarget();
-      cacheBoardRect();
-      positionOverlaysOnBoard();
-    }
+  await animateHeldBoardReshuffle(
+    state.gameActive ? false : state.idlePreview,
+    state.gameActive
+  );
 
-    return;
-  }
+  updateRoundPill();
+  updateTitleForCurrentTarget();
+  cacheBoardRect();
+  positionOverlaysOnBoard();
+
+  return;
+}
 
   const deck = await buildDeck(state.cardCount);
 
