@@ -103,6 +103,10 @@ document.addEventListener("DOMContentLoaded", function () {
     activeRoundTime: 20,
     activeCardCount: 12,
     activeWinTarget: 1,
+    isHoldingBoardOffline: false,
+lastGoodDeck: [],
+lastGoodCardCount: 0,
+lastGoodWinTarget: 0,
     theme: {
   bg: "#0F1115",
   accent: "#FFFFFF",
@@ -1078,12 +1082,50 @@ panelText: app.querySelector("#fp-color-panel-text"),
   // Utility helpers
   // ─────────────────────────────────────────────────────────────────────────────
   function shuffle(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const r = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[r]] = [arr[r], arr[i]];
-    }
-    return arr;
+  for (let i = arr.length - 1; i > 0; i--) {
+    const r = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[r]] = [arr[r], arr[i]];
   }
+  return arr;
+}
+
+// ⬇️ ADD THIS RIGHT HERE
+function enableOfflineHold() {
+  state.isHoldingBoardOffline = true;
+}
+
+function disableOfflineHold() {
+  state.isHoldingBoardOffline = false;
+}
+
+// ⬇️ ADD RIGHT UNDER enable/disableOfflineHold
+
+window.addEventListener("offline", function() {
+  state.isHoldingBoardOffline = true;
+});
+
+window.addEventListener("online", function() {
+  state.isHoldingBoardOffline = false;
+});
+  
+function rememberLastGoodBoard() {
+  if (!Array.isArray(state.deck) || !state.deck.length) return;
+  state.lastGoodDeck = state.deck.slice();
+  state.lastGoodCardCount = state.activeCardCount || state.deck.length || state.cardCount;
+  state.lastGoodWinTarget = state.activeWinTarget || getActiveWinTargetForDeck(state.deck.length, state.currentRound);
+}
+
+function hasUsableHeldBoard() {
+  return Array.isArray(state.lastGoodDeck) && state.lastGoodDeck.length > 0;
+}
+
+function restoreHeldBoardIntoState() {
+  if (!hasUsableHeldBoard()) return false;
+  state.deck = state.lastGoodDeck.slice();
+  state.activeCardCount = state.lastGoodCardCount || state.deck.length || state.cardCount;
+  state.activeWinTarget = state.lastGoodWinTarget || getActiveWinTargetForDeck(state.deck.length, state.currentRound);
+  return true;
+}
 
   function saveCachedGalleryUrls(urls) {
     try {
@@ -1153,7 +1195,9 @@ panelText: app.querySelector("#fp-color-panel-text"),
   }
   
   function preloadDeckImages(deck) {
-  if (!Array.isArray(deck) || !deck.length) return Promise.resolve();
+  if (!Array.isArray(deck) || !deck.length) {
+    return Promise.resolve({ ok: true, failed: [], loaded: [] });
+  }
 
   const uniqueUrls = [...new Set(deck.filter(Boolean))];
 
@@ -1161,41 +1205,78 @@ panelText: app.querySelector("#fp-color-panel-text"),
     uniqueUrls.map(function(src) {
       return new Promise(function(resolve) {
         const img = new Image();
+        let settled = false;
 
-        function finish() {
-          if (typeof img.decode === "function") {
-            img.decode().then(resolve).catch(resolve);
-          } else {
-            resolve();
-          }
+        function done(result) {
+          if (settled) return;
+          settled = true;
+          resolve(result);
         }
 
-        img.onload = finish;
-        img.onerror = resolve;
+        img.onload = function() {
+          if (typeof img.decode === "function") {
+            img.decode()
+              .then(function() {
+                done({ src: src, ok: true });
+              })
+              .catch(function() {
+                done({ src: src, ok: true });
+              });
+          } else {
+            done({ src: src, ok: true });
+          }
+        };
+
+        img.onerror = function() {
+          done({ src: src, ok: false });
+        };
+
         img.src = src;
 
         if (img.complete) {
-          finish();
+          if (img.naturalWidth > 0) {
+            done({ src: src, ok: true });
+          } else {
+            done({ src: src, ok: false });
+          }
         }
       });
     })
-  );
+  ).then(function(results) {
+    const failed = results.filter(function(r) { return !r.ok; }).map(function(r) { return r.src; });
+    const loaded = results.filter(function(r) { return r.ok; }).map(function(r) { return r.src; });
+    return {
+      ok: failed.length === 0,
+      failed: failed,
+      loaded: loaded
+    };
+  });
 }
-  
+
 function preloadDeckImagesWithTimeout(deck, timeoutMs) {
   timeoutMs = timeoutMs || 3000;
 
   return Promise.race([
-    preloadDeckImages(deck).then(function() {
-      return { ok: true, timedOut: false };
+    preloadDeckImages(deck).then(function(result) {
+      return {
+        ok: !!result.ok,
+        timedOut: false,
+        failed: result.failed || [],
+        loaded: result.loaded || []
+      };
     }),
     new Promise(function(resolve) {
       setTimeout(function() {
-        resolve({ ok: false, timedOut: true });
+        resolve({
+          ok: false,
+          timedOut: true,
+          failed: ["__timeout__"],
+          loaded: []
+        });
       }, timeoutMs);
     })
   ]);
-}  
+}
 
   function slugifyFontName(name) {
     return String(name || "Custom Font")
@@ -1911,8 +1992,14 @@ positionOverlaysOnBoard();
   // Deck building
   // ─────────────────────────────────────────────────────────────────────────────
     async function buildDeck(cardCountOverride) {
-    const deckSize = cardCountOverride || state.cardCount;
-    const cb = (location.href.indexOf("?") > -1 ? "&" : "?") + "t=" + Date.now();
+
+  // ⬇️ ADD THIS RIGHT HERE
+  if (navigator.onLine === false) {
+  return null;
+}
+
+  const deckSize = cardCountOverride || state.cardCount;
+  const cb = (location.href.indexOf("?") > -1 ? "&" : "?") + "t=" + Date.now();
 
     // 1) Try live fetch first
     try {
@@ -2282,11 +2369,13 @@ positionOverlaysOnBoard();
 
   const preloadResult = await preloadDeckImagesWithTimeout(pendingDeck, 3000);
 
-  // If new images are not ready in time, keep current board visible
   if (!preloadResult.ok) {
-    console.warn("Idle refresh skipped because images were not ready in time.");
+    console.warn("Idle refresh blocked. Holding current board.", preloadResult);
+    enableOfflineHold();
     return false;
   }
+
+  disableOfflineHold();
 
   state.deck = pendingDeck;
   state.activeCardCount = state.cardCount;
@@ -2299,6 +2388,8 @@ positionOverlaysOnBoard();
   });
 
   renderBoard(nextShowAll, false);
+  rememberLastGoodBoard();
+
   el.board.classList.remove("fp-refresh-out");
   el.board.classList.add("fp-refresh-in");
 
@@ -2489,7 +2580,10 @@ positionOverlaysOnBoard();
     el.center.classList.add("hidden"); hideCountdown(true);
     el.roundTransition.classList.remove("show"); el.roundTransition.classList.add("hidden");
     updateNameUI(); updateRoundPill(); updateTitleForCurrentTarget();
-    if (state.deck.length) renderBoard(state.idlePreview, false);
+    if (state.deck.length) {
+  renderBoard(state.idlePreview, false);
+  rememberLastGoodBoard();
+}
 cacheBoardRect();
 positionOverlaysOnBoard();
 el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboard(); startIdleRefreshTimer();
@@ -2512,12 +2606,16 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
   }
 
     async function prepareDeck(withAnimation) {
+  if (navigator.onLine === false) {
+  enableOfflineHold();
+  return;
+}
+
   const deck = await buildDeck(state.cardCount);
 
-  // No-blank-board behavior:
-  // if deck build fails, keep the currently visible deck untouched
   if (!deck || !deck.length) {
     console.warn("No deck could be built. Keeping current board.");
+    enableOfflineHold();
     return;
   }
 
@@ -2526,10 +2624,19 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
       const swapped = await animateBoardRefresh(deck, state.idlePreview);
       if (!swapped) return;
     } else {
+      const preloadResult = await preloadDeckImagesWithTimeout(deck, 3000);
+      if (!preloadResult.ok) {
+        console.warn("Initial/idle deck blocked. Holding current board.", preloadResult);
+        enableOfflineHold();
+        return;
+      }
+
+      disableOfflineHold();
       state.deck = deck;
       state.activeCardCount = state.cardCount;
       state.activeWinTarget = getActiveWinTargetForDeck(state.activeCardCount, state.currentRound);
       renderBoard(state.idlePreview, false);
+      rememberLastGoodBoard();
     }
   }
 
@@ -2537,39 +2644,44 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
 }
   
     async function rebuildBoardNow(withAnimation) {
+  if (navigator.onLine === false) {
+  enableOfflineHold();
+  return;
+}
+
   const deck = await buildDeck(state.cardCount);
 
   if (!deck || !deck.length) {
     console.warn("Could not rebuild board immediately. Keeping current board.");
+    enableOfflineHold();
     return;
   }
+
+  const preloadResult = await preloadDeckImagesWithTimeout(deck, 3000);
+  if (!preloadResult.ok) {
+    console.warn("Rebuild blocked because at least one image failed.", preloadResult);
+    enableOfflineHold();
+    return;
+  }
+
+  disableOfflineHold();
 
   if (!state.gameActive) {
     if (withAnimation) {
       await animateBoardRefresh(deck, state.idlePreview);
     } else {
-      const preloadResult = await preloadDeckImagesWithTimeout(deck, 3000);
-      if (!preloadResult.ok) {
-        console.warn("Rebuild skipped because images were not ready in time.");
-        return;
-      }
-
       state.deck = deck;
       state.activeCardCount = state.cardCount;
       state.activeWinTarget = getActiveWinTargetForDeck(state.activeCardCount, state.currentRound);
       renderBoard(state.idlePreview, false);
+      rememberLastGoodBoard();
     }
   } else {
-    const preloadResult = await preloadDeckImagesWithTimeout(deck, 3000);
-    if (!preloadResult.ok) {
-      console.warn("In-game rebuild skipped because images were not ready in time.");
-      return;
-    }
-
     state.deck = deck;
     state.activeCardCount = state.cardCount;
     state.activeWinTarget = getActiveWinTargetForDeck(state.activeCardCount, state.currentRound);
     renderBoard(false, true);
+    rememberLastGoodBoard();
   }
 
   updateRoundPill();
@@ -2592,25 +2704,57 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
 
   cacheBoardRect();
 
-  const nextDeck = await buildDeck(state.activeCardCount);
+  let nextDeck = null;
+  let usingHeldBoard = false;
 
-  if (!nextDeck || !nextDeck.length) {
-    console.warn("Could not build round deck. Keeping current board.");
-    goIdle();
-    return;
+  if (navigator.onLine === false) {
+    if (!restoreHeldBoardIntoState() && state.deck && state.deck.length) {
+      state.activeCardCount = state.deck.length;
+      state.activeWinTarget = getActiveWinTargetForDeck(state.deck.length, state.currentRound);
+    } else if (hasUsableHeldBoard()) {
+      usingHeldBoard = true;
+    } else {
+      console.warn("Offline hold active, but no good board is available.");
+      goIdle();
+      return;
+    }
+
+    enableOfflineHold();
+  } else {
+    nextDeck = await buildDeck(state.activeCardCount);
+
+    if (!nextDeck || !nextDeck.length) {
+      console.warn("Could not build round deck. Trying held board.");
+      if (!restoreHeldBoardIntoState() && !(state.deck && state.deck.length)) {
+        goIdle();
+        return;
+      }
+      usingHeldBoard = true;
+      enableOfflineHold();
+    } else {
+      const preloadResult = await preloadDeckImagesWithTimeout(nextDeck, 4000);
+
+      if (!preloadResult.ok) {
+        console.warn("Round deck blocked. Falling back to held board.", preloadResult);
+        if (!restoreHeldBoardIntoState() && !(state.deck && state.deck.length)) {
+          goIdle();
+          return;
+        }
+        usingHeldBoard = true;
+        enableOfflineHold();
+      } else {
+        disableOfflineHold();
+        state.deck = nextDeck;
+        state.activeWinTarget = getActiveWinTargetForDeck(state.deck.length, state.currentRound);
+      }
+    }
   }
 
-  const preloadResult = await preloadDeckImagesWithTimeout(nextDeck, 4000);
-
-  // Round start should wait longer than idle. If still not ready, fall back.
-  if (!preloadResult.ok) {
-    console.warn("Round deck images were not ready in time. Falling back to idle.");
-    goIdle();
-    return;
+  if (usingHeldBoard && state.deck && state.deck.length) {
+    state.activeCardCount = state.deck.length;
+    state.activeWinTarget = getActiveWinTargetForDeck(state.deck.length, state.currentRound);
   }
 
-  state.deck = nextDeck;
-  state.activeWinTarget = getActiveWinTargetForDeck(state.deck.length, state.currentRound);
   updateRoundPill();
   updateTitleForCurrentTarget();
 
@@ -2624,6 +2768,7 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
   });
 
   renderBoard(state.startPreview, false);
+  rememberLastGoodBoard();
 
   el.board.classList.remove("fp-refresh-out");
   el.board.classList.add("fp-refresh-in");
@@ -3166,8 +3311,11 @@ el.resetAll.onclick = resetAllSettings;
   updateRoundPill();
   updateTitleForCurrentTarget();
 
-  prepareDeck(false).then(function(){
-    setTimerDisplay(state.roundTime);
-    goIdle();
-  });
+  prepareDeck(false).then(function() {
+  if (state.deck && state.deck.length) {
+    rememberLastGoodBoard();
+  }
+  setTimerDisplay(state.roundTime);
+  goIdle();
+});
 });
