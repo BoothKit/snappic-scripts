@@ -58,7 +58,6 @@ document.addEventListener("DOMContentLoaded", function () {
     leaderboard: "fp_lb_v13",
     galleryMode: "fp_gallery_mode_v1",
     cachedGalleryUrls: "fp_cached_gallery_urls_v1",
-    cachedLastDeck: "fp_cached_last_deck_v1"
   };
 
   const CARD_COUNTS = [6, 8, 10, 12, 16, 20, 30];
@@ -1127,6 +1126,15 @@ function restoreHeldBoardIntoState() {
   return true;
 }
 
+// ⬇️ ADD THIS RIGHT HERE
+function reshuffleHeldBoardIntoState() {
+  if (!hasUsableHeldBoard()) return false;
+  state.deck = shuffle(state.lastGoodDeck.slice());
+  state.activeCardCount = state.lastGoodCardCount || state.deck.length || state.cardCount;
+  state.activeWinTarget = state.lastGoodWinTarget || getActiveWinTargetForDeck(state.deck.length, state.currentRound);
+  return true;
+}
+
   function saveCachedGalleryUrls(urls) {
     try {
       localStorage.setItem(STORAGE_KEYS.cachedGalleryUrls, JSON.stringify(urls || []));
@@ -1138,23 +1146,6 @@ function restoreHeldBoardIntoState() {
   function getCachedGalleryUrls() {
     try {
       const raw = JSON.parse(localStorage.getItem(STORAGE_KEYS.cachedGalleryUrls) || "[]");
-      return Array.isArray(raw) ? raw.filter(Boolean) : [];
-    } catch (err) {
-      return [];
-    }
-  }
-
-  function saveCachedLastDeck(deck) {
-    try {
-      localStorage.setItem(STORAGE_KEYS.cachedLastDeck, JSON.stringify(deck || []));
-    } catch (err) {
-      console.warn("Could not save cached last deck", err);
-    }
-  }
-
-  function getCachedLastDeck() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(STORAGE_KEYS.cachedLastDeck) || "[]");
       return Array.isArray(raw) ? raw.filter(Boolean) : [];
     } catch (err) {
       return [];
@@ -1992,67 +1983,50 @@ positionOverlaysOnBoard();
   // Deck building
   // ─────────────────────────────────────────────────────────────────────────────
     async function buildDeck(cardCountOverride) {
-
-  // ⬇️ ADD THIS RIGHT HERE
   if (navigator.onLine === false) {
-  return null;
-}
+    return null;
+  }
 
   const deckSize = cardCountOverride || state.cardCount;
   const cb = (location.href.indexOf("?") > -1 ? "&" : "?") + "t=" + Date.now();
 
-    // 1) Try live fetch first
-    try {
-      const html = await fetch(location.href + cb, { cache: "no-store" }).then(function(r) {
-        if (!r.ok) throw new Error("Fetch failed with status " + r.status);
-        return r.text();
-      });
+  // 1) Try live fetch first
+  try {
+    const html = await fetch(location.href + cb, { cache: "no-store" }).then(function(r) {
+      if (!r.ok) throw new Error("Fetch failed with status " + r.status);
+      return r.text();
+    });
 
-      const doc = new DOMParser().parseFromString(html, "text/html");
-      const urls = [...new Set(
-        [...doc.querySelectorAll("#gallery .grid-item img")]
-          .map(function(img) { return img.src; })
-          .filter(Boolean)
-      )];
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const urls = [...new Set(
+      [...doc.querySelectorAll("#gallery .grid-item img")]
+        .map(function(img) { return img.src; })
+        .filter(Boolean)
+    )];
 
-      if (urls.length) {
-        saveCachedGalleryUrls(urls);
-        const liveDeck = buildDeckFromUrls(urls, deckSize);
-        if (liveDeck.length === deckSize) {
-          saveCachedLastDeck(liveDeck);
-          return liveDeck;
-        }
-      }
-    } catch (err) {
-      console.warn("Live deck fetch failed, trying cached gallery URLs", err);
-    }
-
-    // 2) Fall back to cached gallery URL pool
-    const cachedUrls = getCachedGalleryUrls();
-    if (cachedUrls.length) {
-      const cachedDeck = buildDeckFromUrls(cachedUrls, deckSize);
-      if (cachedDeck.length === deckSize) {
-        saveCachedLastDeck(cachedDeck);
-        return cachedDeck;
+    if (urls.length) {
+      saveCachedGalleryUrls(urls);
+      const liveDeck = buildDeckFromUrls(urls, deckSize);
+      if (liveDeck.length === deckSize) {
+        return liveDeck;
       }
     }
-
-    // 3) Fall back to last successful deck
-    const lastDeck = getCachedLastDeck();
-    if (lastDeck.length) {
-      if (lastDeck.length === deckSize) {
-        return shuffle(lastDeck.slice());
-      }
-
-      const rebuiltFromLastDeckUrls = buildDeckFromUrls([...new Set(lastDeck)], deckSize);
-      if (rebuiltFromLastDeckUrls.length === deckSize) {
-        return rebuiltFromLastDeckUrls;
-      }
-    }
-
-    // 4) Nothing usable
-    return null;
+  } catch (err) {
+    console.warn("Live deck fetch failed, trying cached gallery URLs", err);
   }
+
+  // 2) Fall back to cached gallery URL pool
+  const cachedUrls = getCachedGalleryUrls();
+  if (cachedUrls.length) {
+    const cachedDeck = buildDeckFromUrls(cachedUrls, deckSize);
+    if (cachedDeck.length === deckSize) {
+      return cachedDeck;
+    }
+  }
+
+  // 3) Nothing usable
+  return null;
+}
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Timer
@@ -2607,9 +2581,17 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
 
     async function prepareDeck(withAnimation) {
   if (navigator.onLine === false) {
-  enableOfflineHold();
-  return;
-}
+    enableOfflineHold();
+
+    if (reshuffleHeldBoardIntoState() && !state.gameActive) {
+      renderBoard(state.idlePreview, false);
+      updateTitleForCurrentTarget();
+      cacheBoardRect();
+      positionOverlaysOnBoard();
+    }
+
+    return;
+  }
 
   const deck = await buildDeck(state.cardCount);
 
@@ -2645,9 +2627,18 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
   
     async function rebuildBoardNow(withAnimation) {
   if (navigator.onLine === false) {
-  enableOfflineHold();
-  return;
-}
+    enableOfflineHold();
+
+    if (reshuffleHeldBoardIntoState()) {
+      renderBoard(state.gameActive ? false : state.idlePreview, state.gameActive);
+      updateRoundPill();
+      updateTitleForCurrentTarget();
+      cacheBoardRect();
+      positionOverlaysOnBoard();
+    }
+
+    return;
+  }
 
   const deck = await buildDeck(state.cardCount);
 
@@ -2708,47 +2699,46 @@ el.play.classList.remove("hidden"); updateBoardShellMode(); renderLiveLeaderboar
   let usingHeldBoard = false;
 
   if (navigator.onLine === false) {
-    if (!restoreHeldBoardIntoState() && state.deck && state.deck.length) {
-      state.activeCardCount = state.deck.length;
-      state.activeWinTarget = getActiveWinTargetForDeck(state.deck.length, state.currentRound);
-    } else if (hasUsableHeldBoard()) {
-      usingHeldBoard = true;
-    } else {
-      console.warn("Offline hold active, but no good board is available.");
+  if (reshuffleHeldBoardIntoState()) {
+    usingHeldBoard = true;
+  } else if (restoreHeldBoardIntoState()) {
+    usingHeldBoard = true;
+  } else {
+    console.warn("Offline hold active, but no good board is available.");
+    goIdle();
+    return;
+  }
+
+  enableOfflineHold();
+} else {
+  nextDeck = await buildDeck(state.activeCardCount);
+
+  if (!nextDeck || !nextDeck.length) {
+    console.warn("Could not build round deck. Trying held board.");
+    if (!reshuffleHeldBoardIntoState() && !restoreHeldBoardIntoState()) {
       goIdle();
       return;
     }
-
+    usingHeldBoard = true;
     enableOfflineHold();
   } else {
-    nextDeck = await buildDeck(state.activeCardCount);
+    const preloadResult = await preloadDeckImagesWithTimeout(nextDeck, 4000);
 
-    if (!nextDeck || !nextDeck.length) {
-      console.warn("Could not build round deck. Trying held board.");
-      if (!restoreHeldBoardIntoState() && !(state.deck && state.deck.length)) {
+    if (!preloadResult.ok) {
+      console.warn("Round deck blocked. Falling back to held board.", preloadResult);
+      if (!reshuffleHeldBoardIntoState() && !restoreHeldBoardIntoState()) {
         goIdle();
         return;
       }
       usingHeldBoard = true;
       enableOfflineHold();
     } else {
-      const preloadResult = await preloadDeckImagesWithTimeout(nextDeck, 4000);
-
-      if (!preloadResult.ok) {
-        console.warn("Round deck blocked. Falling back to held board.", preloadResult);
-        if (!restoreHeldBoardIntoState() && !(state.deck && state.deck.length)) {
-          goIdle();
-          return;
-        }
-        usingHeldBoard = true;
-        enableOfflineHold();
-      } else {
-        disableOfflineHold();
-        state.deck = nextDeck;
-        state.activeWinTarget = getActiveWinTargetForDeck(state.deck.length, state.currentRound);
-      }
+      disableOfflineHold();
+      state.deck = nextDeck;
+      state.activeWinTarget = getActiveWinTargetForDeck(state.deck.length, state.currentRound);
     }
   }
+}
 
   if (usingHeldBoard && state.deck && state.deck.length) {
     state.activeCardCount = state.deck.length;
